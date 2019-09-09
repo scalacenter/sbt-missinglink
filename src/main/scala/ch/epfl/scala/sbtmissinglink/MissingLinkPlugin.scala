@@ -32,8 +32,7 @@ object MissingLinkPlugin extends AutoPlugin {
       val classDir = (classDirectory in Compile).value
       val conflicts = loadArtifactsAndCheckConflicts(cp, classDir, log)
 
-      for (conflict <- conflicts)
-        log.error(conflict.toString())
+      outputConflicts(conflicts, log)
       if (conflicts.nonEmpty)
         throw new MessageOnlyException("there were conflicts")
     }
@@ -81,7 +80,7 @@ object MissingLinkPlugin extends AutoPlugin {
     conflicts.asScala.toSeq
   }
 
-  def toArtifact(outputDirectory: File): Artifact = {
+  private def toArtifact(outputDirectory: File): Artifact = {
     new ArtifactBuilder()
       .name(new ArtifactName("project"))
       .classes(Files.fileTreeTraverser().breadthFirstTraversal(outputDirectory)
@@ -91,7 +90,7 @@ object MissingLinkPlugin extends AutoPlugin {
       .build()
   }
 
-  def loadClass(f: File): DeclaredClass = {
+  private def loadClass(f: File): DeclaredClass = {
     new com.spotify.missinglink.ClassLoader(new FileInputStream(f)).load()
   }
 
@@ -130,5 +129,56 @@ object MissingLinkPlugin extends AutoPlugin {
 
     val list = cp.filter(isValid(_)).map(fileToArtifact(_))
     ImmutableList.copyOf(list.asJava: java.lang.Iterable[Artifact])
+  }
+
+  private def outputConflicts(conflicts: Seq[Conflict], log: Logger): Unit = {
+    def logLine(msg: String): Unit =
+      log.error(msg)
+
+    val descriptions = Map(
+      ConflictCategory.CLASS_NOT_FOUND -> "Class being called not found",
+      ConflictCategory.METHOD_SIGNATURE_NOT_FOUND -> "Method being called not found",
+    )
+
+    // group conflict by category
+    val byCategory = conflicts.groupBy(_.category())
+
+    for ((category, conflictsInCategory) <- byCategory) {
+      val desc = descriptions.getOrElse(category, category.name().replace('_', ' '))
+      logLine("")
+      logLine("Category: " + desc)
+
+      // next group by artifact containing the conflict
+      val byArtifact = conflictsInCategory.groupBy(_.usedBy())
+
+      for ((artifactName, conflictsInArtifact) <- byArtifact) {
+        logLine("  In artifact: " + artifactName.name())
+
+        // next group by class containing the conflict
+        val byClassName = conflictsInArtifact.groupBy(_.dependency().fromClass())
+
+        for ((classDesc, conflictsInClass) <- byClassName) {
+          logLine("    In class: " + classDesc.toString())
+
+          for (conflict <- conflictsInClass) {
+            def optionalLineNumber(lineNumber: Int): String =
+              if (lineNumber != 0) ":" + lineNumber else ""
+
+            val dep = conflict.dependency()
+            logLine(
+                "      In method:  " +
+                dep.fromMethod().prettyWithoutReturnType() +
+                optionalLineNumber(dep.fromLineNumber()))
+            logLine("      " + dep.describe())
+            logLine("      Problem: " + conflict.reason())
+            if (conflict.existsIn() != ConflictChecker.UNKNOWN_ARTIFACT_NAME)
+              logLine("      Found in: " + conflict.existsIn().name())
+            // this could be smarter about separating each blob of warnings by method, but for
+            // now just output a bunch of dashes always
+            logLine("      --------")
+          }
+        }
+      }
+    }
   }
 }
