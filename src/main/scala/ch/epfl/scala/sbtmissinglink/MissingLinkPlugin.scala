@@ -27,7 +27,6 @@ object MissingLinkPlugin extends AutoPlugin {
   val configSettings: Seq[Setting[_]] = Def.settings(
     missinglinkCheck := {
       val log = streams.value.log
-      log.info("hello")
 
       val cp = Attributed.data(fullClasspath.value)
       val classDir = (classDirectory in Compile).value
