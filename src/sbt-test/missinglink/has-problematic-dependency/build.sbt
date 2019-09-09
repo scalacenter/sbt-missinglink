@@ -5,7 +5,6 @@ inThisBuild(Def.settings(
 
 lazy val `has-problematic-dependency` = project
   .in(file("."))
-  .enablePlugins(MissingLinkPlugin)
   .settings(
     libraryDependencies ++= Seq(
       "com.google.guava" % "guava" % "14.0",
