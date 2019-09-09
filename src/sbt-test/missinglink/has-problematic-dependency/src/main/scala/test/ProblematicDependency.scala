@@ -1,4 +1,4 @@
-package ch.epfl.scala.sbtmissinglink.examples
+package test
 
 import com.google.common.base.Enums
 
