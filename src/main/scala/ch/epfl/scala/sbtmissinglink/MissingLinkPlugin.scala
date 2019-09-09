@@ -2,6 +2,9 @@ package ch.epfl.scala.sbtmissinglink
 
 import sbt._
 import sbt.Keys._
+import sbt.plugins.JvmPlugin
+
+import java.io.FileInputStream
 
 import scala.collection.JavaConverters._
 
@@ -14,7 +17,6 @@ import com.spotify.missinglink.datamodel.{
   Artifact, ArtifactBuilder, ArtifactName, ClassTypeDescriptor, DeclaredClass,
   Dependency
 }
-import java.io.FileInputStream
 
 object MissingLinkPlugin extends AutoPlugin {
   object autoImport {
@@ -23,6 +25,9 @@ object MissingLinkPlugin extends AutoPlugin {
   }
 
   import autoImport._
+
+  override def requires: Plugins = JvmPlugin
+  override def trigger: PluginTrigger = allRequirements
 
   val configSettings: Seq[Setting[_]] = Def.settings(
     missinglinkCheck := {

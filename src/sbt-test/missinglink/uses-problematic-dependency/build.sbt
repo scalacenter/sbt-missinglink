@@ -14,7 +14,6 @@ lazy val `has-problematic-dependency` = project
 
 lazy val `uses-problematic-dependency` = project
   .in(file("."))
-  .enablePlugins(MissingLinkPlugin)
   .dependsOn(`has-problematic-dependency`)
   .settings(
     libraryDependencies ++= Seq(
