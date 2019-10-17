@@ -26,7 +26,7 @@ You can test another configuration, such as `Test` or `Runtime`, with:
 
 
 ```
-> theProject/runtime:missinglinkCheck
+> theProject/Runtime/missinglinkCheck
 ```
 
 ### Unsupported features
