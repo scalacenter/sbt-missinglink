@@ -36,7 +36,8 @@ lazy val `sbt-missinglink` = project
   .enablePlugins(SbtPlugin)
   .settings(
     libraryDependencies ++= Seq(
-      "com.spotify" % "missinglink-core" % "0.1.5"
+      "com.spotify" % "missinglink-core" % "0.2.0",
+      "com.google.guava" % "guava" % "18.0",
     ),
 
     // configuration fro scripted
