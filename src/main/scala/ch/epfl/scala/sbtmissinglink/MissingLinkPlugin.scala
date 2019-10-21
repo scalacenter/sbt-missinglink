@@ -78,9 +78,8 @@ object MissingLinkPlugin extends AutoPlugin {
 
     val conflictChecker = new ConflictChecker
 
-    val omitted = null
     val conflicts = conflictChecker.check(
-        projectArtifact, runtimeProjectArtifacts, allArtifacts, omitted)
+        projectArtifact, runtimeProjectArtifacts, allArtifacts)
 
     conflicts.asScala.toSeq
   }
@@ -96,7 +95,7 @@ object MissingLinkPlugin extends AutoPlugin {
   }
 
   private def loadClass(f: File): DeclaredClass = {
-    new com.spotify.missinglink.ClassLoader(new FileInputStream(f)).load()
+    com.spotify.missinglink.ClassLoader.load(new FileInputStream(f))
   }
 
   private def loadBootstrapArtifacts(bootstrapClasspath: String, log: Logger): java.util.List[Artifact] = {
