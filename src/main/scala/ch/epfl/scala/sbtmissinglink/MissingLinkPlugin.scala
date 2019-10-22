@@ -8,7 +8,7 @@ import java.io.FileInputStream
 
 import scala.collection.JavaConverters._
 
-import com.spotify.missinglink.{ArtifactLoader, Conflict, ConflictChecker}
+import com.spotify.missinglink.{ArtifactLoader, Conflict, ConflictChecker, Java9ModuleLoader}
 import com.spotify.missinglink.Conflict.ConflictCategory
 import com.spotify.missinglink.datamodel.{
   Artifact,
@@ -106,8 +106,7 @@ object MissingLinkPlugin extends AutoPlugin {
 
   private def loadBootstrapArtifacts(bootstrapClasspath: String, log: Logger): List[Artifact] = {
     if (bootstrapClasspath == null) {
-      ???
-      //Java9ModuleLoader.getJava9ModuleArtifacts((s, ex) => log.warn(s))
+      Java9ModuleLoader.getJava9ModuleArtifacts((s, ex) => log.warn(s)).asScala.toList
     } else {
       constructArtifacts(
         bootstrapClasspath.split(System.getProperty("path.separator")).map(file(_)),
