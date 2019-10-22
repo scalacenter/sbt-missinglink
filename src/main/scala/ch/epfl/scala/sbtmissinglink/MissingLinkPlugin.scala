@@ -8,9 +8,6 @@ import java.io.FileInputStream
 
 import scala.collection.JavaConverters._
 
-import com.google.common.collect.ImmutableList
-import com.google.common.io.Files
-
 import com.spotify.missinglink.{ArtifactLoader, Conflict, ConflictChecker}
 import com.spotify.missinglink.Conflict.ConflictCategory
 import com.spotify.missinglink.datamodel.{
@@ -57,10 +54,7 @@ object MissingLinkPlugin extends AutoPlugin {
     // also need to load JDK classes from the bootstrap classpath
     val bootstrapArtifacts = loadBootstrapArtifacts(bootClasspathToUse(log), log)
 
-    val allArtifacts = ImmutableList.builder[Artifact]()
-      .addAll(runtimeProjectArtifacts)
-      .addAll(bootstrapArtifacts)
-      .build()
+    val allArtifacts = runtimeProjectArtifacts ++ bootstrapArtifacts
 
     val projectArtifact = toArtifact(classDirectory)
 
@@ -72,25 +66,28 @@ object MissingLinkPlugin extends AutoPlugin {
 
     log.debug("Checking for conflicts starting from " + projectArtifact.name().name())
     log.debug("Artifacts included in the project: ")
-    for (artifact <- runtimeProjectArtifacts.asScala) {
+    for (artifact <- runtimeProjectArtifacts) {
       log.debug("    " + artifact.name().name())
     }
 
     val conflictChecker = new ConflictChecker
 
     val conflicts = conflictChecker.check(
-        projectArtifact, runtimeProjectArtifacts, allArtifacts)
+        projectArtifact, runtimeProjectArtifacts.asJava, allArtifacts.asJava)
 
     conflicts.asScala.toSeq
   }
 
   private def toArtifact(outputDirectory: File): Artifact = {
+    val classes =
+      (outputDirectory ** "*.class").get()
+        .map(loadClass)
+        .map { c => c.className() -> c }
+        .toMap.asJava
+
     new ArtifactBuilder()
       .name(new ArtifactName("project"))
-      .classes(Files.fileTreeTraverser().breadthFirstTraversal(outputDirectory)
-        .filter(f => f.getName().endsWith(".class"))
-        .transform(loadClass(_))
-        .uniqueIndex(_.className()))
+      .classes(classes)
       .build()
   }
 
@@ -98,7 +95,7 @@ object MissingLinkPlugin extends AutoPlugin {
     com.spotify.missinglink.ClassLoader.load(new FileInputStream(f))
   }
 
-  private def loadBootstrapArtifacts(bootstrapClasspath: String, log: Logger): java.util.List[Artifact] = {
+  private def loadBootstrapArtifacts(bootstrapClasspath: String, log: Logger): List[Artifact] = {
     if (bootstrapClasspath == null) {
       ???
       //Java9ModuleLoader.getJava9ModuleArtifacts((s, ex) => log.warn(s))
@@ -120,7 +117,7 @@ object MissingLinkPlugin extends AutoPlugin {
     /*}*/
   }
 
-  private def constructArtifacts(cp: Seq[File], log: Logger): ImmutableList[Artifact] = {
+  private def constructArtifacts(cp: Seq[File], log: Logger): List[Artifact] = {
     val artifactLoader = new ArtifactLoader
 
     def isValid(entry: File): Boolean =
@@ -131,8 +128,7 @@ object MissingLinkPlugin extends AutoPlugin {
       artifactLoader.load(f)
     }
 
-    val list = cp.filter(isValid(_)).map(fileToArtifact(_))
-    ImmutableList.copyOf(list.asJava: java.lang.Iterable[Artifact])
+    cp.filter(isValid(_)).map(fileToArtifact(_)).toList
   }
 
   private def outputConflicts(conflicts: Seq[Conflict], log: Logger): Unit = {
