@@ -91,9 +91,7 @@ object MissingLinkPlugin extends AutoPlugin {
       (outputDirectory ** "*.class")
         .get()
         .map(loadClass)
-        .map { c =>
-          c.className() -> c
-        }
+        .map(c => c.className() -> c)
         .toMap
         .asJava
 
