@@ -11,7 +11,11 @@ import scala.collection.JavaConverters._
 import com.spotify.missinglink.{ArtifactLoader, Conflict, ConflictChecker}
 import com.spotify.missinglink.Conflict.ConflictCategory
 import com.spotify.missinglink.datamodel.{
-  Artifact, ArtifactBuilder, ArtifactName, ClassTypeDescriptor, DeclaredClass,
+  Artifact,
+  ArtifactBuilder,
+  ArtifactName,
+  ClassTypeDescriptor,
+  DeclaredClass,
   Dependency
 }
 
@@ -42,12 +46,15 @@ object MissingLinkPlugin extends AutoPlugin {
 
   override def projectSettings: Seq[Setting[_]] = {
     inConfig(Compile)(configSettings) ++
-    inConfig(Runtime)(configSettings) ++
-    inConfig(Test)(configSettings)
+      inConfig(Runtime)(configSettings) ++
+      inConfig(Test)(configSettings)
   }
 
-  private def loadArtifactsAndCheckConflicts(cp: Seq[File],
-      classDirectory: File, log: Logger): Seq[Conflict] = {
+  private def loadArtifactsAndCheckConflicts(
+    cp: Seq[File],
+    classDirectory: File,
+    log: Logger
+  ): Seq[Conflict] = {
 
     val runtimeProjectArtifacts = constructArtifacts(cp, log)
 
@@ -60,8 +67,9 @@ object MissingLinkPlugin extends AutoPlugin {
 
     if (projectArtifact.classes().isEmpty()) {
       log.warn(
-          "No classes found in project build directory" +
-          " - did you run 'mvn compile' first?")
+        "No classes found in project build directory" +
+          " - did you run 'mvn compile' first?"
+      )
     }
 
     log.debug("Checking for conflicts starting from " + projectArtifact.name().name())
@@ -72,18 +80,22 @@ object MissingLinkPlugin extends AutoPlugin {
 
     val conflictChecker = new ConflictChecker
 
-    val conflicts = conflictChecker.check(
-        projectArtifact, runtimeProjectArtifacts.asJava, allArtifacts.asJava)
+    val conflicts =
+      conflictChecker.check(projectArtifact, runtimeProjectArtifacts.asJava, allArtifacts.asJava)
 
     conflicts.asScala.toSeq
   }
 
   private def toArtifact(outputDirectory: File): Artifact = {
     val classes =
-      (outputDirectory ** "*.class").get()
+      (outputDirectory ** "*.class")
+        .get()
         .map(loadClass)
-        .map { c => c.className() -> c }
-        .toMap.asJava
+        .map { c =>
+          c.className() -> c
+        }
+        .toMap
+        .asJava
 
     new ArtifactBuilder()
       .name(new ArtifactName("project"))
@@ -91,9 +103,8 @@ object MissingLinkPlugin extends AutoPlugin {
       .build()
   }
 
-  private def loadClass(f: File): DeclaredClass = {
+  private def loadClass(f: File): DeclaredClass =
     com.spotify.missinglink.ClassLoader.load(new FileInputStream(f))
-  }
 
   private def loadBootstrapArtifacts(bootstrapClasspath: String, log: Logger): List[Artifact] = {
     if (bootstrapClasspath == null) {
@@ -101,8 +112,9 @@ object MissingLinkPlugin extends AutoPlugin {
       //Java9ModuleLoader.getJava9ModuleArtifacts((s, ex) => log.warn(s))
     } else {
       constructArtifacts(
-          bootstrapClasspath.split(System.getProperty("path.separator")).map(file(_)),
-          log)
+        bootstrapClasspath.split(System.getProperty("path.separator")).map(file(_)),
+        log
+      )
     }
   }
 
@@ -111,9 +123,9 @@ object MissingLinkPlugin extends AutoPlugin {
       log.debug("using configured boot classpath: " + this.bootClasspath);
       this.bootClasspath;
     } else {*/
-      val bootClasspath = System.getProperty("sun.boot.class.path")
-      log.debug("derived bootclasspath: " + bootClasspath)
-      bootClasspath
+    val bootClasspath = System.getProperty("sun.boot.class.path")
+    log.debug("derived bootclasspath: " + bootClasspath)
+    bootClasspath
     /*}*/
   }
 
@@ -137,7 +149,7 @@ object MissingLinkPlugin extends AutoPlugin {
 
     val descriptions = Map(
       ConflictCategory.CLASS_NOT_FOUND -> "Class being called not found",
-      ConflictCategory.METHOD_SIGNATURE_NOT_FOUND -> "Method being called not found",
+      ConflictCategory.METHOD_SIGNATURE_NOT_FOUND -> "Method being called not found"
     )
 
     // group conflict by category
@@ -166,9 +178,10 @@ object MissingLinkPlugin extends AutoPlugin {
 
             val dep = conflict.dependency()
             logLine(
-                "      In method:  " +
+              "      In method:  " +
                 dep.fromMethod().prettyWithoutReturnType() +
-                optionalLineNumber(dep.fromLineNumber()))
+                optionalLineNumber(dep.fromLineNumber())
+            )
             logLine("      " + dep.describe())
             logLine("      Problem: " + conflict.reason())
             if (conflict.existsIn() != ConflictChecker.UNKNOWN_ARTIFACT_NAME)

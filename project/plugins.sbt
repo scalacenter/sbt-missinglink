@@ -4,3 +4,5 @@ libraryDependencies ++= Seq(
 
 unmanagedSourceDirectories in Compile +=
   baseDirectory.value.getParentFile / "src/main/scala"
+
+addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.0.6")

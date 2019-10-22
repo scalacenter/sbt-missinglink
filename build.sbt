@@ -1,35 +1,40 @@
-inThisBuild(Def.settings(
-  scalaVersion := "2.12.9",
-  organization := "ch.epfl.scala",
-  version := "0.1.1-SNAPSHOT",
-
-  homepage := Some(url("https://github.com/scalacenter/sbt-missinglink")),
-  licenses += ("BSD New",
-      url("https://github.com/scalacenter/sbt-missinglink/blob/master/LICENSE")),
-  scmInfo := Some(ScmInfo(
-      url("https://github.com/scalacenter/sbt-missinglink"),
-      "scm:git:git@github.com:scalacenter/sbt-missinglink.git",
-      Some("scm:git:git@github.com:scalacenter/sbt-missinglink.git"))),
-
-  publishMavenStyle := true,
-  publishTo := {
-    val nexus = "https://oss.sonatype.org/"
-    if (version.value.endsWith("-SNAPSHOT"))
-      Some("snapshots" at nexus + "content/repositories/snapshots")
-    else
-      Some("releases" at nexus + "service/local/staging/deploy/maven2")
-  },
-  pomExtra := (
-    <developers>
+inThisBuild(
+  Def.settings(
+    scalaVersion := "2.12.9",
+    organization := "ch.epfl.scala",
+    version := "0.1.1-SNAPSHOT",
+    homepage := Some(url("https://github.com/scalacenter/sbt-missinglink")),
+    licenses += ("BSD New",
+    url("https://github.com/scalacenter/sbt-missinglink/blob/master/LICENSE")),
+    scmInfo := Some(
+      ScmInfo(
+        url("https://github.com/scalacenter/sbt-missinglink"),
+        "scm:git:git@github.com:scalacenter/sbt-missinglink.git",
+        Some("scm:git:git@github.com:scalacenter/sbt-missinglink.git")
+      )
+    ),
+    publishMavenStyle := true,
+    publishTo := {
+      val nexus = "https://oss.sonatype.org/"
+      if (version.value.endsWith("-SNAPSHOT"))
+        Some("snapshots" at nexus + "content/repositories/snapshots")
+      else
+        Some("releases" at nexus + "service/local/staging/deploy/maven2")
+    },
+    pomExtra := (
+      <developers>
       <developer>
         <id>sjrd</id>
         <name>Sébastien Doeraene</name>
         <url>https://github.com/sjrd/</url>
       </developer>
     </developers>
-  ),
-  pomIncludeRepository := { _ => false },
-))
+    ),
+    pomIncludeRepository := { _ =>
+      false
+    }
+  )
+)
 
 lazy val `sbt-missinglink` = project
   .in(file("."))
@@ -38,10 +43,10 @@ lazy val `sbt-missinglink` = project
     libraryDependencies ++= Seq(
       "com.spotify" % "missinglink-core" % "0.2.0"
     ),
-
     // configuration fro scripted
-    scriptedLaunchOpts := { scriptedLaunchOpts.value ++
-      Seq("-Xmx1024M", "-Dplugin.version=" + version.value)
+    scriptedLaunchOpts := {
+      scriptedLaunchOpts.value ++
+        Seq("-Xmx1024M", "-Dplugin.version=" + version.value)
     },
-    scriptedBufferLog := false,
+    scriptedBufferLog := false
   )
