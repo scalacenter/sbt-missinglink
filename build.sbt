@@ -22,13 +22,15 @@ inThisBuild(
         Some("releases" at nexus + "service/local/staging/deploy/maven2")
     },
     pomExtra := (
+      // format: off
       <developers>
-      <developer>
-        <id>sjrd</id>
-        <name>Sébastien Doeraene</name>
-        <url>https://github.com/sjrd/</url>
-      </developer>
-    </developers>
+        <developer>
+          <id>sjrd</id>
+          <name>Sébastien Doeraene</name>
+          <url>https://github.com/sjrd/</url>
+        </developer>
+      </developers>
+      // format: on
     ),
     pomIncludeRepository := { _ =>
       false
