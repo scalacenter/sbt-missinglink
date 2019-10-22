@@ -147,7 +147,7 @@ object MissingLinkPlugin extends AutoPlugin {
 
     val descriptions = Map(
       ConflictCategory.CLASS_NOT_FOUND -> "Class being called not found",
-      ConflictCategory.METHOD_SIGNATURE_NOT_FOUND -> "Method being called not found"
+      ConflictCategory.METHOD_SIGNATURE_NOT_FOUND -> "Method being called not found",
     )
 
     // group conflict by category

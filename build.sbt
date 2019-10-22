@@ -34,7 +34,7 @@ inThisBuild(
     ),
     pomIncludeRepository := { _ =>
       false
-    }
+    },
   )
 )
 
