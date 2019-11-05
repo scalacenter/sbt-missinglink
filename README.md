@@ -20,6 +20,18 @@ This will check that the transitive dependencies of your project do not exhibit
 any binary compatibility conflict, assuming that the methods of your `Compile`
 confliction (in `src/main/`) are all called.
 
+You can ignore certain conflicts with regex match:
+
+```scala
+Compile / missinglinkIgnoreConflicts += "com.google.common.base.Enums.*".r
+```                                                                             
+
+If you're certain a library has conflicts which can be safely ignored and want to speedup checking a bit you can exclude the whole of it from analysis:
+
+```scala
+Compile / missinglinkExcludeDependencies ++= List("ch.qos.logback" % "logback-core" % "1.2.3", "ch.qos.logback" % "logback-classic" % "1.2.3")
+``` 
+
 ### Testing another configuration
 
 You can test another configuration, such as `Test` or `Runtime`, with:
@@ -28,14 +40,6 @@ You can test another configuration, such as `Test` or `Runtime`, with:
 ```
 > theProject/Runtime/missinglinkCheck
 ```
-
-### Unsupported features
-
-At the moment, compared to the upstream `missinglink` project, this sbt plugin
-does not support the following features:
-
-* Excluding some dependencies from the analysis
-* Ignoring conflicts in certain packages
 
 ## More information
 

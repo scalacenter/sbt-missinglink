@@ -1,3 +1,5 @@
 > compile
 > compile:missinglinkCheck
 -> runtime:missinglinkCheck
+> addIgnore
+> runtime:missinglinkCheck

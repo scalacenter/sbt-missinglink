@@ -13,4 +13,6 @@ lazy val `has-problematic-dependency` = project
 
     // Speed up compilation a bit. Our .java files do not need to see the .scala files.
     compileOrder := CompileOrder.JavaThenScala,
+    //for some reason can't do this directly from script
+    addCommandAlias("addIgnore", """set Runtime / missinglinkIgnoreConflicts += "com.google.common.base.Enums.*".r""")
   )
