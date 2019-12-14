@@ -2,6 +2,7 @@ package ch.epfl.scala.sbtmissinglink
 
 import sbt._
 import sbt.Keys._
+import sbt.librarymanagement.ModuleFilter
 import sbt.plugins.JvmPlugin
 
 import java.io.FileInputStream
@@ -42,6 +43,10 @@ object MissingLinkPlugin extends AutoPlugin {
         "Optional list of packages to ignore conflicts where the destination/called-side " +
           "of the conflict is in one of the specified packages."
       )
+
+
+    val missinglinkExcludedDependencies =
+      settingKey[Seq[ModuleFilter]]("Dependencies that are excluded from analysis")
   }
 
   import autoImport._
@@ -53,12 +58,15 @@ object MissingLinkPlugin extends AutoPlugin {
     missinglinkCheck := {
       val log = streams.value.log
 
-      val cp = Attributed.data(fullClasspath.value)
+      val cp = fullClasspath.value
       val classDir = (classDirectory in Compile).value
       val failOnConflicts = missinglinkFailOnConflicts.value
       val ignoreSourcePackages = missinglinkIgnoreSourcePackages.value
       val ignoreDestinationPackages = missinglinkIgnoreDestinationPackages.value
-      val conflicts = loadArtifactsAndCheckConflicts(cp, classDir, log)
+      val filter =
+        missinglinkExcludedDependencies.value.foldLeft[ModuleFilter](_ => true)((k, v) => k - v)
+
+      val conflicts = loadArtifactsAndCheckConflicts(cp, classDir, filter, log)
       val filteredConflicts =
         filterConflicts(conflicts, ignoreSourcePackages, ignoreDestinationPackages, log)
 
@@ -87,7 +95,8 @@ object MissingLinkPlugin extends AutoPlugin {
   override def globalSettings: Seq[Def.Setting[_]] = Seq(
     missinglinkFailOnConflicts := true,
     missinglinkIgnoreSourcePackages := Nil,
-    missinglinkIgnoreDestinationPackages := Nil
+    missinglinkIgnoreDestinationPackages := Nil,
+    missinglinkExcludedDependencies := Nil
   )
 
   override def projectSettings: Seq[Setting[_]] = {
@@ -97,8 +106,9 @@ object MissingLinkPlugin extends AutoPlugin {
   }
 
   private def loadArtifactsAndCheckConflicts(
-    cp: Seq[File],
+    cp: Classpath,
     classDirectory: File,
+    excluded: ModuleFilter,
     log: Logger
   ): Seq[Conflict] = {
 
@@ -107,27 +117,35 @@ object MissingLinkPlugin extends AutoPlugin {
     // also need to load JDK classes from the bootstrap classpath
     val bootstrapArtifacts = loadBootstrapArtifacts(bootClasspathToUse(log), log)
 
-    val allArtifacts = runtimeProjectArtifacts ++ bootstrapArtifacts
+    val allArtifacts = runtimeProjectArtifacts.map(_.artifact) ++ bootstrapArtifacts
+
+    val runtimeArtifactsAfterExclusions = runtimeProjectArtifacts
+      .filter(f => f.module.fold(true)(excluded))
+      .map(_.artifact)
 
     val projectArtifact = toArtifact(classDirectory)
 
     if (projectArtifact.classes().isEmpty()) {
       log.warn(
         "No classes found in project build directory" +
-          " - did you run 'mvn compile' first?"
+          " - did you run 'sbt compile' first?"
       )
     }
 
     log.debug("Checking for conflicts starting from " + projectArtifact.name().name())
     log.debug("Artifacts included in the project: ")
-    for (artifact <- runtimeProjectArtifacts) {
+    for (artifact <- runtimeArtifactsAfterExclusions) {
       log.debug("    " + artifact.name().name())
     }
 
     val conflictChecker = new ConflictChecker
 
     val conflicts =
-      conflictChecker.check(projectArtifact, runtimeProjectArtifacts.asJava, allArtifacts.asJava)
+      conflictChecker.check(
+        projectArtifact,
+        runtimeArtifactsAfterExclusions.asJava,
+        allArtifacts.asJava
+      )
 
     conflicts.asScala.toSeq
   }
@@ -154,10 +172,11 @@ object MissingLinkPlugin extends AutoPlugin {
     if (bootstrapClasspath == null) {
       Java9ModuleLoader.getJava9ModuleArtifacts((s, ex) => log.warn(s)).asScala.toList
     } else {
-      constructArtifacts(
-        bootstrapClasspath.split(System.getProperty("path.separator")).map(file(_)),
-        log
-      )
+      val cp = bootstrapClasspath
+        .split(System.getProperty("path.separator"))
+        .map(f => Attributed.blank(file(f)))
+
+      constructArtifacts(cp, log).map(_.artifact)
     }
   }
 
@@ -172,18 +191,18 @@ object MissingLinkPlugin extends AutoPlugin {
     /*}*/
   }
 
-  private def constructArtifacts(cp: Seq[File], log: Logger): List[Artifact] = {
+  private def constructArtifacts(cp: Classpath, log: Logger): List[ModuleArtifact] = {
     val artifactLoader = new ArtifactLoader
 
     def isValid(entry: File): Boolean =
       (entry.isFile() && entry.getPath().endsWith(".jar")) || entry.isDirectory()
 
-    def fileToArtifact(f: File): Artifact = {
+    def fileToArtifact(f: Attributed[File]): ModuleArtifact = {
       log.debug("loading artifact for path: " + f)
-      artifactLoader.load(f)
+      ModuleArtifact(artifactLoader.load(f.data), f.get(moduleID.key))
     }
 
-    cp.filter(isValid(_)).map(fileToArtifact(_)).toList
+    cp.filter(c => isValid(c.data)).map(fileToArtifact(_)).toList
   }
 
   private def filterConflicts(
@@ -290,4 +309,7 @@ object MissingLinkPlugin extends AutoPlugin {
       }
     }
   }
+
+  final case class ModuleArtifact(artifact: Artifact, module: Option[ModuleID])
+
 }

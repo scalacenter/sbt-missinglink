@@ -51,12 +51,14 @@ missinglinkIgnoreSourcePackages += IgnoredPackage("com.example")
 
 By default, all subpackages of the specified package are also ignored, but this can be disabled by the `ignoreSubpackages` field: `IgnoredPackage("test", ignoreSubpackages = false)`.
 
-### Unsupported features
+### Excluding some dependencies from the analysis
 
-At the moment, compared to the upstream `missinglink` project, this sbt plugin
-does not support the following features:
+You can exclude certain dependencies using `moduleFilter`: 
 
-* Excluding some dependencies from the analysis
+```
+missinglinkExcludedDependencies += moduleFilter(organization = "com.google.guava")
+missinglinkExcludedDependencies += moduleFilter(organization = "ch.qos.logback", name = "logback-core")
+```
 
 ## More information
 
