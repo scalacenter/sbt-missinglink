@@ -29,13 +29,25 @@ You can test another configuration, such as `Test` or `Runtime`, with:
 > theProject/Runtime/missinglinkCheck
 ```
 
+### Ignore conflicts in certain packages
+
+Conflicts can be ignored based on the package name of the class that has the conflict. 
+There are separate configuration options for ignoring conflicts on the "source" side of the conflict and the "destination" side of the conflict.
+Packages on the source side can be ignored with `missinglinkIgnoreSourcePackages` and packages on the destination side can be ignored with `missinglinkIgnoreDestinationPackages`:
+
+```
+missinglinkIgnoreDestinationPackages += IgnoredPackage("com.google.common")
+missinglinkIgnoreSourcePackages += IgnoredPackage("com.example")
+```
+
+By default, all subpackages of the specified package are also ignored, but this can be disabled by the `ignoreSubpackages` field: `IgnoredPackage("test", ignoreSubpackages = false)`.
+
 ### Unsupported features
 
 At the moment, compared to the upstream `missinglink` project, this sbt plugin
 does not support the following features:
 
 * Excluding some dependencies from the analysis
-* Ignoring conflicts in certain packages
 
 ## More information
 
