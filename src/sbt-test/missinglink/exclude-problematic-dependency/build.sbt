@@ -3,7 +3,7 @@ inThisBuild(Def.settings(
   scalaVersion := "2.12.8",
 ))
 
-lazy val `has-problematic-dependency` = project
+lazy val `exclude-problematic-dependency` = project
   .in(file("."))
   .settings(
     libraryDependencies ++= Seq(
