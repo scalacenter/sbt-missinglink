@@ -29,6 +29,15 @@ You can test another configuration, such as `Test` or `Runtime`, with:
 > theProject/Runtime/missinglinkCheck
 ```
 
+### Do not fail on conflicts
+
+By default, the plugin fails the build if any conflicts are found. 
+It can be disabled by the `missinglinkFailOnConflicts` setting:
+
+```
+missinglinkFailOnConflicts := false
+```
+
 ### Ignore conflicts in certain packages
 
 Conflicts can be ignored based on the package name of the class that has the conflict. 

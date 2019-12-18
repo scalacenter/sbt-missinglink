@@ -27,15 +27,18 @@ object MissingLinkPlugin extends AutoPlugin {
 
   object autoImport extends Types {
     val missinglinkCheck: TaskKey[Unit] =
-      taskKey[Unit]("run the missinglink checks")
+      taskKey[Unit]("Run the missinglink checks")
 
-    val missinglinkIgnoreSourcePackages =
+    val missinglinkFailOnConflicts: SettingKey[Boolean] =
+      settingKey[Boolean]("Fail the build if any conflicts are found")
+
+    val missinglinkIgnoreSourcePackages: SettingKey[Seq[IgnoredPackage]] =
       settingKey[Seq[IgnoredPackage]](
         "Optional list of packages to ignore conflicts in where the source of the conflict " +
           "is in one of the specified packages."
       )
 
-    val missinglinkIgnoreDestinationPackages =
+    val missinglinkIgnoreDestinationPackages: SettingKey[Seq[IgnoredPackage]] =
       settingKey[Seq[IgnoredPackage]](
         "Optional list of packages to ignore conflicts in where the destination/called-side " +
           "of the conflict is in one of the specified packages."
@@ -53,6 +56,7 @@ object MissingLinkPlugin extends AutoPlugin {
 
       val cp = Attributed.data(fullClasspath.value)
       val classDir = (classDirectory in Compile).value
+      val failOnConflicts = missinglinkFailOnConflicts.value
       val ignoreSourcePackages = missinglinkIgnoreSourcePackages.value
       val ignoreDestinationPackages = missinglinkIgnoreDestinationPackages.value
       val conflicts = loadArtifactsAndCheckConflicts(cp, classDir, log)
@@ -73,7 +77,8 @@ object MissingLinkPlugin extends AutoPlugin {
 
         outputConflicts(filteredConflicts, log)
 
-        throw new MessageOnlyException(s"There were ($filteredTotal) conflicts")
+        if (failOnConflicts)
+          throw new MessageOnlyException(s"There were ($filteredTotal) conflicts")
       } else {
         log.info("No conflicts found")
       }
@@ -81,6 +86,7 @@ object MissingLinkPlugin extends AutoPlugin {
   )
 
   override def globalSettings: Seq[Def.Setting[_]] = Seq(
+    missinglinkFailOnConflicts := true,
     missinglinkIgnoreSourcePackages := Nil,
     missinglinkIgnoreDestinationPackages := Nil
   )
@@ -202,8 +208,6 @@ object MissingLinkPlugin extends AutoPlugin {
           val descriptor = field(conflict.dependency())
           val className = descriptor.getClassName.replace('/', '.')
           val conflictPackageName = className.substring(0, className.lastIndexOf('.'))
-
-          log.info(s"Descriptor $descriptor. Class name $className. CPN $conflictPackageName")
 
           ignoredPackages.exists { p =>
             conflictPackageName == p.name ||
