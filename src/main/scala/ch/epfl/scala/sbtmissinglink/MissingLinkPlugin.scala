@@ -30,13 +30,18 @@ object MissingLinkPlugin extends AutoPlugin {
   override def requires: Plugins = JvmPlugin
   override def trigger: PluginTrigger = allRequirements
 
+  //missinglink-core has non-threadsafe caches
+  val missinglinkConflictsTag = Tags.Tag("missinglinkConflicts")
   val configSettings: Seq[Setting[_]] = Def.settings(
-    missinglinkConflicts := {
-      val log = streams.value.log
-      val cp = fullClasspath.value
-      val classDir = (classDirectory in Compile).value
-      loadArtifactsAndCheckConflicts(cp, missinglinkExcludeDependencies.value, classDir, log)
-    },
+    missinglinkConflicts := Def
+      .task {
+        val log = streams.value.log
+        val cp = fullClasspath.value
+        val classDir = (classDirectory in Compile).value
+        loadArtifactsAndCheckConflicts(cp, missinglinkExcludeDependencies.value, classDir, log)
+      }
+      .tag(missinglinkConflictsTag)
+      .value,
     missinglinkCheck := {
       val log = streams.value.log
       val allConflicts = missinglinkConflicts.value
@@ -63,6 +68,7 @@ object MissingLinkPlugin extends AutoPlugin {
   override def globalSettings: Seq[Setting[_]] = Seq(
     missinglinkExcludeDependencies := Nil,
     missinglinkIgnoreConflicts := Nil,
+    concurrentRestrictions += Tags.limit(missinglinkConflictsTag, 1)
   )
 
   private def loadArtifactsAndCheckConflicts(
@@ -153,7 +159,7 @@ object MissingLinkPlugin extends AutoPlugin {
 
     def fileToArtifact(f: Attributed[File]) = {
       val module = f.get(moduleID.key)
-      log.debug(s"loading artifact${module.fold(" ")(_.toString())} for path: " + f.data)
+      log.debug(s"loading artifact ${module.fold(" ")(_.toString())} for path: " + f.data)
       val excluded = excludes.exists(e => module.contains(e))
       !excluded -> artifactLoader.load(f.data)
     }
