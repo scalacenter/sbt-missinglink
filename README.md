@@ -18,7 +18,7 @@ the simply run the following task for the project you want to test:
 
 This will check that the transitive dependencies of your project do not exhibit
 any binary compatibility conflict, assuming that the methods of your `Compile`
-confliction (in `src/main/`) are all called.
+configuration (in `src/main/`) are all called.
 
 ### Testing another configuration
 
