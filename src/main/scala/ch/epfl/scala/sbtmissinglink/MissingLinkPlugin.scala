@@ -21,11 +21,10 @@ import com.spotify.missinglink.datamodel.{
 
 object MissingLinkPlugin extends AutoPlugin {
 
-  trait Types {
-    final case class IgnoredPackage(name: String, ignoreSubpackages: Boolean = true)
-  }
+  object autoImport {
 
-  object autoImport extends Types {
+    final case class IgnoredPackage(name: String, ignoreSubpackages: Boolean = true)
+
     val missinglinkCheck: TaskKey[Unit] =
       taskKey[Unit]("Run the missinglink checks")
 
@@ -34,13 +33,13 @@ object MissingLinkPlugin extends AutoPlugin {
 
     val missinglinkIgnoreSourcePackages: SettingKey[Seq[IgnoredPackage]] =
       settingKey[Seq[IgnoredPackage]](
-        "Optional list of packages to ignore conflicts in where the source of the conflict " +
+        "Optional list of packages to ignore conflicts where the source of the conflict " +
           "is in one of the specified packages."
       )
 
     val missinglinkIgnoreDestinationPackages: SettingKey[Seq[IgnoredPackage]] =
       settingKey[Seq[IgnoredPackage]](
-        "Optional list of packages to ignore conflicts in where the destination/called-side " +
+        "Optional list of packages to ignore conflicts where the destination/called-side " +
           "of the conflict is in one of the specified packages."
       )
   }
@@ -73,12 +72,12 @@ object MissingLinkPlugin extends AutoPlugin {
           ""
         }
 
-        log.warn(s"$filteredTotal conflicts found! $diffMessage")
+        log.info(s"$filteredTotal conflicts found! $diffMessage")
 
         outputConflicts(filteredConflicts, log)
 
         if (failOnConflicts)
-          throw new MessageOnlyException(s"There were ($filteredTotal) conflicts")
+          throw new MessageOnlyException(s"There were $filteredTotal conflicts")
       } else {
         log.info("No conflicts found")
       }
@@ -199,7 +198,7 @@ object MissingLinkPlugin extends AutoPlugin {
       name: String,
       setting: String,
       field: Dependency => ClassTypeDescriptor
-    ): Seq[Conflict] => Seq[Conflict] = input => {
+    ): Seq[Conflict] => Seq[Conflict] = { input =>
 
       if (ignoredPackages.nonEmpty) {
         log.debug(s"Ignoring $name packages: ${ignoredPackages.mkString(", ")}")
@@ -219,7 +218,7 @@ object MissingLinkPlugin extends AutoPlugin {
         val diff = input.length - filtered.length
 
         if (diff != 0) {
-          log.warn(
+          log.info(
             s"""
             |$diff conflicts found in ignored $name packages.
             |Run plugin again without the '$setting' configuration to see all conflicts that were found.

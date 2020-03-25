@@ -3,7 +3,7 @@ inThisBuild(Def.settings(
   scalaVersion := "2.12.8",
 ))
 
-lazy val `ignore-source-package` = project
+lazy val `do-not-fail-on-conflicts` = project
   .in(file("."))
   .settings(
     libraryDependencies ++= Seq(
