@@ -4,11 +4,9 @@ import sbt._
 import sbt.Keys._
 import sbt.librarymanagement.ModuleFilter
 import sbt.plugins.JvmPlugin
-
 import java.io.FileInputStream
 
 import scala.collection.JavaConverters._
-
 import com.spotify.missinglink.{ArtifactLoader, Conflict, ConflictChecker, Java9ModuleLoader}
 import com.spotify.missinglink.Conflict.ConflictCategory
 import com.spotify.missinglink.datamodel.{
@@ -53,49 +51,55 @@ object MissingLinkPlugin extends AutoPlugin {
   override def requires: Plugins = JvmPlugin
   override def trigger: PluginTrigger = allRequirements
 
+  //missinglink-core has non-threadsafe caches
+  val missinglinkConflictsTag = Tags.Tag("missinglinkConflicts")
   val configSettings: Seq[Setting[_]] = Def.settings(
-    missinglinkCheck := {
-      val log = streams.value.log
+    missinglinkCheck := Def
+      .task {
+        val log = streams.value.log
 
-      val cp = fullClasspath.value
-      val classDir = (classDirectory in Compile).value
-      val failOnConflicts = missinglinkFailOnConflicts.value
-      val ignoreSourcePackages = missinglinkIgnoreSourcePackages.value
-      val ignoreDestinationPackages = missinglinkIgnoreDestinationPackages.value
-      val filter =
-        missinglinkExcludedDependencies.value.foldLeft[ModuleFilter](_ => true)((k, v) => k - v)
+        val cp = fullClasspath.value
+        val classDir = (classDirectory in Compile).value
+        val failOnConflicts = missinglinkFailOnConflicts.value
+        val ignoreSourcePackages = missinglinkIgnoreSourcePackages.value
+        val ignoreDestinationPackages = missinglinkIgnoreDestinationPackages.value
+        val filter =
+          missinglinkExcludedDependencies.value.foldLeft[ModuleFilter](_ => true)((k, v) => k - v)
 
-      val conflicts = loadArtifactsAndCheckConflicts(cp, classDir, filter, log)
-      val filteredConflicts =
-        filterConflicts(conflicts, ignoreSourcePackages, ignoreDestinationPackages, log)
+        val conflicts = loadArtifactsAndCheckConflicts(cp, classDir, filter, log)
+        val filteredConflicts =
+          filterConflicts(conflicts, ignoreSourcePackages, ignoreDestinationPackages, log)
 
-      if (filteredConflicts.nonEmpty) {
-        val initialTotal = conflicts.length
-        val filteredTotal = filteredConflicts.length
+        if (filteredConflicts.nonEmpty) {
+          val initialTotal = conflicts.length
+          val filteredTotal = filteredConflicts.length
 
-        val diffMessage = if (initialTotal != filteredTotal) {
-          s"($initialTotal conflicts were found before applying filters)"
+          val diffMessage = if (initialTotal != filteredTotal) {
+            s"($initialTotal conflicts were found before applying filters)"
+          } else {
+            ""
+          }
+
+          log.info(s"$filteredTotal conflicts found! $diffMessage")
+
+          outputConflicts(filteredConflicts, log)
+
+          if (failOnConflicts)
+            throw new MessageOnlyException(s"There were $filteredTotal conflicts")
         } else {
-          ""
+          log.info("No conflicts found")
         }
-
-        log.info(s"$filteredTotal conflicts found! $diffMessage")
-
-        outputConflicts(filteredConflicts, log)
-
-        if (failOnConflicts)
-          throw new MessageOnlyException(s"There were $filteredTotal conflicts")
-      } else {
-        log.info("No conflicts found")
       }
-    }
+      .tag(missinglinkConflictsTag)
+      .value,
   )
 
   override def globalSettings: Seq[Def.Setting[_]] = Seq(
     missinglinkFailOnConflicts := true,
     missinglinkIgnoreSourcePackages := Nil,
     missinglinkIgnoreDestinationPackages := Nil,
-    missinglinkExcludedDependencies := Nil
+    missinglinkExcludedDependencies := Nil,
+    concurrentRestrictions += Tags.limit(missinglinkConflictsTag, 1),
   )
 
   override def projectSettings: Seq[Setting[_]] = {
