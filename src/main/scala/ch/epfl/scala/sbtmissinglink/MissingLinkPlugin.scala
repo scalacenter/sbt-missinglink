@@ -20,9 +20,28 @@ import com.spotify.missinglink.datamodel.{
 }
 
 object MissingLinkPlugin extends AutoPlugin {
+
   object autoImport {
+
+    final case class IgnoredPackage(name: String, ignoreSubpackages: Boolean = true)
+
     val missinglinkCheck: TaskKey[Unit] =
-      taskKey[Unit]("run the missinglink checks")
+      taskKey[Unit]("Run the missinglink checks")
+
+    val missinglinkFailOnConflicts: SettingKey[Boolean] =
+      settingKey[Boolean]("Fail the build if any conflicts are found")
+
+    val missinglinkIgnoreSourcePackages: SettingKey[Seq[IgnoredPackage]] =
+      settingKey[Seq[IgnoredPackage]](
+        "Optional list of packages to ignore conflicts where the source of the conflict " +
+          "is in one of the specified packages."
+      )
+
+    val missinglinkIgnoreDestinationPackages: SettingKey[Seq[IgnoredPackage]] =
+      settingKey[Seq[IgnoredPackage]](
+        "Optional list of packages to ignore conflicts where the destination/called-side " +
+          "of the conflict is in one of the specified packages."
+      )
   }
 
   import autoImport._
@@ -36,12 +55,39 @@ object MissingLinkPlugin extends AutoPlugin {
 
       val cp = Attributed.data(fullClasspath.value)
       val classDir = (classDirectory in Compile).value
+      val failOnConflicts = missinglinkFailOnConflicts.value
+      val ignoreSourcePackages = missinglinkIgnoreSourcePackages.value
+      val ignoreDestinationPackages = missinglinkIgnoreDestinationPackages.value
       val conflicts = loadArtifactsAndCheckConflicts(cp, classDir, log)
+      val filteredConflicts =
+        filterConflicts(conflicts, ignoreSourcePackages, ignoreDestinationPackages, log)
 
-      outputConflicts(conflicts, log)
-      if (conflicts.nonEmpty)
-        throw new MessageOnlyException("there were conflicts")
+      if (filteredConflicts.nonEmpty) {
+        val initialTotal = conflicts.length
+        val filteredTotal = filteredConflicts.length
+
+        val diffMessage = if (initialTotal != filteredTotal) {
+          s"($initialTotal conflicts were found before applying filters)"
+        } else {
+          ""
+        }
+
+        log.info(s"$filteredTotal conflicts found! $diffMessage")
+
+        outputConflicts(filteredConflicts, log)
+
+        if (failOnConflicts)
+          throw new MessageOnlyException(s"There were $filteredTotal conflicts")
+      } else {
+        log.info("No conflicts found")
+      }
     }
+  )
+
+  override def globalSettings: Seq[Def.Setting[_]] = Seq(
+    missinglinkFailOnConflicts := true,
+    missinglinkIgnoreSourcePackages := Nil,
+    missinglinkIgnoreDestinationPackages := Nil
   )
 
   override def projectSettings: Seq[Setting[_]] = {
@@ -138,6 +184,59 @@ object MissingLinkPlugin extends AutoPlugin {
     }
 
     cp.filter(isValid(_)).map(fileToArtifact(_)).toList
+  }
+
+  private def filterConflicts(
+    conflicts: Seq[Conflict],
+    ignoreSourcePackages: Seq[IgnoredPackage],
+    ignoreDestinationPackages: Seq[IgnoredPackage],
+    log: Logger
+  ): Seq[Conflict] = {
+
+    def filter(
+      ignoredPackages: Seq[IgnoredPackage],
+      name: String,
+      setting: String,
+      field: Dependency => ClassTypeDescriptor
+    ): Seq[Conflict] => Seq[Conflict] = { input =>
+      if (ignoredPackages.nonEmpty) {
+        log.debug(s"Ignoring $name packages: ${ignoredPackages.mkString(", ")}")
+
+        def isIgnored(conflict: Conflict): Boolean = {
+          val descriptor = field(conflict.dependency())
+          val className = descriptor.getClassName.replace('/', '.')
+          val conflictPackageName = className.substring(0, className.lastIndexOf('.'))
+
+          ignoredPackages.exists { p =>
+            conflictPackageName == p.name ||
+            (p.ignoreSubpackages && conflictPackageName.startsWith(p.name + "."))
+          }
+        }
+
+        val filtered = input.filterNot(isIgnored)
+        val diff = input.length - filtered.length
+
+        if (diff != 0) {
+          log.info(
+            s"""
+            |$diff conflicts found in ignored $name packages.
+            |Run plugin again without the '$setting' configuration to see all conflicts that were found.
+             """.stripMargin
+          )
+        }
+
+        filtered
+      } else {
+        input
+      }
+    }
+
+    val filters = List(
+      filter(ignoreSourcePackages, "source", "ignoreSourcePackages", _.fromClass),
+      filter(ignoreDestinationPackages, "destination", "ignoreDestinationPackages", _.targetClass)
+    )
+
+    Function.chain(filters).apply(conflicts)
   }
 
   private def outputConflicts(conflicts: Seq[Conflict], log: Logger): Unit = {
