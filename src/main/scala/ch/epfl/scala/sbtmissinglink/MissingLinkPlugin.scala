@@ -199,7 +199,6 @@ object MissingLinkPlugin extends AutoPlugin {
       setting: String,
       field: Dependency => ClassTypeDescriptor
     ): Seq[Conflict] => Seq[Conflict] = { input =>
-
       if (ignoredPackages.nonEmpty) {
         log.debug(s"Ignoring $name packages: ${ignoredPackages.mkString(", ")}")
 
