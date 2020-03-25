@@ -44,7 +44,6 @@ object MissingLinkPlugin extends AutoPlugin {
           "of the conflict is in one of the specified packages."
       )
 
-
     val missinglinkExcludedDependencies =
       settingKey[Seq[ModuleFilter]]("Dependencies that are excluded from analysis")
   }
@@ -310,6 +309,6 @@ object MissingLinkPlugin extends AutoPlugin {
     }
   }
 
-  final case class ModuleArtifact(artifact: Artifact, module: Option[ModuleID])
+  private final case class ModuleArtifact(artifact: Artifact, module: Option[ModuleID])
 
 }
