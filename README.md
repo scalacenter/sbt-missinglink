@@ -7,7 +7,7 @@ An sbt plugin for [missinglink](https://github.com/spotify/missinglink).
 Add the following line in `project/plugins.sbt`:
 
 ```scala
-addSbtPlugin("ch.epfl.scala" % "sbt-missinglink" % "0.3.0")
+addSbtPlugin("ch.epfl.scala" % "sbt-missinglink" % "0.3.1")
 ```
 
 the simply run the following task for the project you want to test:
@@ -31,7 +31,7 @@ You can test another configuration, such as `Test` or `Runtime`, with:
 
 ### Do not fail on conflicts
 
-By default, the plugin fails the build if any conflicts are found. 
+By default, the plugin fails the build if any conflicts are found.
 It can be disabled by the `missinglinkFailOnConflicts` setting:
 
 ```
@@ -40,7 +40,7 @@ missinglinkFailOnConflicts := false
 
 ### Ignore conflicts in certain packages
 
-Conflicts can be ignored based on the package name of the class that has the conflict. 
+Conflicts can be ignored based on the package name of the class that has the conflict.
 There are separate configuration options for ignoring conflicts on the "source" side of the conflict and the "destination" side of the conflict.
 Packages on the source side can be ignored with `missinglinkIgnoreSourcePackages` and packages on the destination side can be ignored with `missinglinkIgnoreDestinationPackages`:
 
@@ -53,7 +53,7 @@ By default, all subpackages of the specified package are also ignored, but this 
 
 ### Excluding some dependencies from the analysis
 
-You can exclude certain dependencies using `moduleFilter`: 
+You can exclude certain dependencies using `moduleFilter`:
 
 ```
 missinglinkExcludedDependencies += moduleFilter(organization = "com.google.guava")
