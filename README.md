@@ -65,3 +65,9 @@ missinglinkExcludedDependencies += moduleFilter(organization = "ch.qos.logback",
 You can find more information about the problem statement, caveats and
 limitations, etc. in the upstream project
 [missinglink](https://github.com/spotify/missinglink).
+
+## Acknowledgments
+
+<a title="Scala Center" href="https://scala.epfl.ch/"><img alt="Scala Center" src="https://scala.epfl.ch/resources/img/scala-center-logo-black.png" height="60" /></a>
+
+This project is funded by the <a title="Scala Center" href="https://scala.epfl.ch/">Scala Center</a>.
