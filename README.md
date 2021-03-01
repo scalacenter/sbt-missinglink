@@ -60,6 +60,17 @@ missinglinkExcludedDependencies += moduleFilter(organization = "com.google.guava
 missinglinkExcludedDependencies += moduleFilter(organization = "ch.qos.logback", name = "logback-core")
 ```
 
+### Limiting the concurrency
+
+sbt runs the missing-link analysis on the modules you have concurrently.
+Analysis of each module can take up a considerable amount of memory,
+so you might want to limit the degree of concurrency.
+To run missing-link at most on 4 projects at a time, add this setting to your project `root`.
+
+```scala
+concurrentRestrictions += Tags.limit(missinglinkConflictsTag, 4)
+```
+
 ## More information
 
 You can find more information about the problem statement, caveats and

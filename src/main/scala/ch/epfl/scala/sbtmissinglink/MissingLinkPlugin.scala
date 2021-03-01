@@ -53,7 +53,7 @@ object MissingLinkPlugin extends AutoPlugin {
   override def requires: Plugins = JvmPlugin
   override def trigger: PluginTrigger = allRequirements
 
-  // missinglink-core has non-threadsafe caches
+  // Make it easy to throttle the concurrency of running missing-link on multiple projects, it consumes a lot of memory
   val missinglinkConflictsTag = Tags.Tag("missinglinkConflicts")
 
   val configSettings: Seq[Setting[_]] = Def.settings(
@@ -102,7 +102,6 @@ object MissingLinkPlugin extends AutoPlugin {
     missinglinkIgnoreSourcePackages := Nil,
     missinglinkIgnoreDestinationPackages := Nil,
     missinglinkExcludedDependencies := Nil,
-    concurrentRestrictions += Tags.limit(missinglinkConflictsTag, 1),
   )
 
   override def projectSettings: Seq[Setting[_]] = {

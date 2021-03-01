@@ -1,5 +1,5 @@
 libraryDependencies ++= Seq(
-  "com.spotify" % "missinglink-core" % "0.2.1"
+  "com.spotify" % "missinglink-core" % "0.2.2"
 )
 
 unmanagedSourceDirectories in Compile +=
