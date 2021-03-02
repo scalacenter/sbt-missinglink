@@ -7,7 +7,7 @@ An sbt plugin for [missinglink](https://github.com/spotify/missinglink).
 Add the following line in `project/plugins.sbt`:
 
 ```scala
-addSbtPlugin("ch.epfl.scala" % "sbt-missinglink" % "0.3.1")
+addSbtPlugin("ch.epfl.scala" % "sbt-missinglink" % "0.3.2")
 ```
 
 the simply run the following task for the project you want to test:
