@@ -19,6 +19,8 @@ jobs:
         with:
           java-version: ${{ matrix.javaversion }}
       - uses: coursier/cache-action@v5
+        with:
+          extraKey: ${{ matrix.javaversion }}
       - name: Formatting
         run: sbt scalafmtSbtCheck scalafmtCheck
       - name: Scripted tests
