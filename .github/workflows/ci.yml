@@ -20,7 +20,7 @@ jobs:
           java-version: ${{ matrix.javaversion }}
       - uses: coursier/cache-action@v5
       - name: Formatting
-        run: sbt scalafmtSbtCheck scalafmtCheck
+        run: sbt lint
       - name: Scripted tests
         run: sbt scripted
       - name: Test generate documentation

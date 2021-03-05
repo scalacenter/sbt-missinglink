@@ -1,15 +1,5 @@
 package ch.epfl.scala.sbtmissinglink
 
-import sbt._
-import sbt.Keys._
-import sbt.librarymanagement.ModuleFilter
-import sbt.plugins.JvmPlugin
-
-import java.io.FileInputStream
-
-import scala.collection.JavaConverters._
-
-import com.spotify.missinglink.{ArtifactLoader, Conflict, ConflictChecker, Java9ModuleLoader}
 import com.spotify.missinglink.Conflict.ConflictCategory
 import com.spotify.missinglink.datamodel.{
   Artifact,
@@ -19,6 +9,14 @@ import com.spotify.missinglink.datamodel.{
   DeclaredClass,
   Dependency
 }
+import com.spotify.missinglink.{ArtifactLoader, Conflict, ConflictChecker, Java9ModuleLoader}
+import sbt.Keys._
+import sbt._
+import sbt.librarymanagement.ModuleFilter
+import sbt.plugins.JvmPlugin
+
+import java.io.FileInputStream
+import scala.collection.JavaConverters._
 
 object MissingLinkPlugin extends AutoPlugin {
 
@@ -44,7 +42,7 @@ object MissingLinkPlugin extends AutoPlugin {
           "of the conflict is in one of the specified packages."
       )
 
-    val missinglinkExcludedDependencies =
+    val missinglinkExcludedDependencies: SettingKey[Seq[ModuleFilter]] =
       settingKey[Seq[ModuleFilter]]("Dependencies that are excluded from analysis")
   }
 
@@ -54,7 +52,7 @@ object MissingLinkPlugin extends AutoPlugin {
   override def trigger: PluginTrigger = allRequirements
 
   // Make it easy to throttle the concurrency of running missing-link on multiple projects, it consumes a lot of memory
-  val missinglinkConflictsTag = Tags.Tag("missinglinkConflicts")
+  val missinglinkConflictsTag: Tags.Tag = Tags.Tag("missinglinkConflicts")
 
   val configSettings: Seq[Setting[_]] = Def.settings(
     missinglinkCheck := Def
@@ -139,9 +137,8 @@ object MissingLinkPlugin extends AutoPlugin {
 
     log.debug("Checking for conflicts starting from " + projectArtifact.name().name())
     log.debug("Artifacts included in the project: ")
-    for (artifact <- runtimeArtifactsAfterExclusions) {
+    for (artifact <- runtimeArtifactsAfterExclusions)
       log.debug("    " + artifact.name().name())
-    }
 
     val conflictChecker = new ConflictChecker
 
@@ -175,7 +172,7 @@ object MissingLinkPlugin extends AutoPlugin {
 
   private def loadBootstrapArtifacts(bootstrapClasspath: String, log: Logger): List[Artifact] = {
     if (bootstrapClasspath == null) {
-      Java9ModuleLoader.getJava9ModuleArtifacts((s, ex) => log.warn(s)).asScala.toList
+      Java9ModuleLoader.getJava9ModuleArtifacts((s, _) => log.warn(s)).asScala.toList
     } else {
       val cp = bootstrapClasspath
         .split(System.getProperty("path.separator"))
