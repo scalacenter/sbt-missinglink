@@ -52,6 +52,13 @@ lazy val `sbt-missinglink` = project
     },
     scriptedBufferLog := false,
     scalacOptions += "-Ywarn-unused",
+    scalacOptions ++= {
+      if (sys.env.contains("CI")) {
+        List("-Xfatal-warnings")
+      } else {
+        List() // to enable Scalafix locally
+      }
+    },
     semanticdbEnabled := true,
     semanticdbOptions += "-P:semanticdb:synthetics:on",
     semanticdbVersion := scalafixSemanticdb.revision,
