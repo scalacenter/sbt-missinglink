@@ -1,6 +1,6 @@
 inThisBuild(
   Def.settings(
-    scalaVersion := "2.12.9",
+    scalaVersion := "2.12.12",
     organization := "ch.epfl.scala",
     version := "0.3.3-SNAPSHOT",
     homepage := Some(url("https://github.com/scalacenter/sbt-missinglink")),
@@ -51,4 +51,16 @@ lazy val `sbt-missinglink` = project
         Seq("-Xmx1024M", "-Dplugin.version=" + version.value)
     },
     scriptedBufferLog := false,
+    scalacOptions += "-Ywarn-unused",
+    semanticdbEnabled := true,
+    semanticdbOptions += "-P:semanticdb:synthetics:on",
+    semanticdbVersion := scalafixSemanticdb.revision,
+    ThisBuild / scalafixScalaBinaryVersion := CrossVersion.binaryScalaVersion(scalaVersion.value),
+    ThisBuild / scalafixDependencies += "com.github.liancheng" %% "organize-imports" % "0.5.0",
   )
+
+addCommandAlias("fix", "; all compile:scalafix test:scalafix; all scalafmtSbt scalafmtAll")
+addCommandAlias(
+  "lint",
+  "; scalafmtSbtCheck; scalafmtCheckAll; compile:scalafix --check; test:scalafix --check"
+)
