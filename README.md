@@ -4,13 +4,17 @@ An sbt plugin for [missinglink](https://github.com/spotify/missinglink).
 
 ## Usage
 
-Add the following line in `project/plugins.sbt`:
+Add the following lines in `project/plugins.sbt`:
 
 ```scala
 addSbtPlugin("ch.epfl.scala" % "sbt-missinglink" % "0.3.2")
+libraryDependencies += "com.spotify" % "missinglink-core" % "<missinglink-version>"
 ```
 
-the simply run the following task for the project you want to test:
+You can find the latest missinglink version [in their release list](https://github.com/spotify/missinglink/releases).
+As of this writing, the latest version is `0.2.5`.
+
+Then, run the following task for the project you want to test:
 
 ```
 > theProject/missinglinkCheck
