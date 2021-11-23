@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        javaversion: ["adopt@1.8", "adopt@1.11"]
+        javaversion: ["adopt@1.8", "adopt@1.11", "17"]
     steps:
       - uses: actions/checkout@v2
       - uses: olafurpg/setup-scala@v10
@@ -25,3 +25,9 @@ jobs:
         run: sbt scripted
       - name: Test generate documentation
         run: sbt doc
+  ci:
+    runs-on: ubuntu-20.04
+    needs: [ build ]
+    steps:
+      - name: Aggregate of lint, and all tests
+        run: echo "ci passed"
