@@ -7,12 +7,15 @@ An sbt plugin for [missinglink](https://github.com/spotify/missinglink).
 Add the following lines in `project/plugins.sbt`:
 
 ```scala
-addSbtPlugin("ch.epfl.scala" % "sbt-missinglink" % "0.3.2")
-libraryDependencies += "com.spotify" % "missinglink-core" % "<missinglink-version>"
+addSbtPlugin("ch.epfl.scala" % "sbt-missinglink" % "<sbt-missinglink-version>")
+libraryDependencies += "com.spotify" % "missinglink-core" % "<missinglink-core-version>"
 ```
 
-You can find the latest missinglink version [in their release list](https://github.com/spotify/missinglink/releases).
-As of this writing, the latest version is `0.2.5`.
+You can find the latest `missinglink-core` version [in their release list](https://github.com/spotify/missinglink/releases).
+
+| `sbt-missinglink` | `missinglink-core` |
+| :---: | :---: |
+| ![sbt-missinglink badge](https://maven-badges.herokuapp.com/maven-central/ch.epfl.scala/sbt-missinglink/badge.svg) | ![missinglink-core badge](https://maven-badges.herokuapp.com/maven-central/com.spotify/missinglink-core/badge.svg) |
 
 Then, run the following task for the project you want to test:
 
