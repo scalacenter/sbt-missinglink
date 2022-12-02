@@ -6,9 +6,7 @@ import sbt.librarymanagement.ModuleFilter
 import sbt.plugins.JvmPlugin
 
 import java.io.FileInputStream
-
 import scala.collection.JavaConverters._
-
 import com.spotify.missinglink.{ArtifactLoader, Conflict, ConflictChecker, Java9ModuleLoader}
 import com.spotify.missinglink.Conflict.ConflictCategory
 import com.spotify.missinglink.datamodel.{
@@ -24,7 +22,15 @@ object MissingLinkPlugin extends AutoPlugin {
 
   object autoImport {
 
-    final case class IgnoredPackage(name: String, ignoreSubpackages: Boolean = true)
+    final case class IgnoredPackage(name: String, ignoreSubpackages: Boolean = true) extends PackageFilter {
+      override def toFilter: String => Boolean =
+        (packageName: String) => packageName != name && (!ignoreSubpackages || !packageName.startsWith(s"$name."))
+    }
+
+    final case class TargetedPackage(name: String, targetSubpackages: Boolean = true)  extends PackageFilter {
+      override def toFilter: String => Boolean =
+        (packageName: String) => packageName == name || (targetSubpackages && packageName.startsWith(s"$name."))
+    }
 
     val missinglinkCheck: TaskKey[Unit] =
       taskKey[Unit]("Run the missinglink checks")
@@ -38,10 +44,22 @@ object MissingLinkPlugin extends AutoPlugin {
           "is in one of the specified packages."
       )
 
+    val missinglinkTargetSourcePackages: SettingKey[Seq[TargetedPackage]] =
+      settingKey[Seq[TargetedPackage]](
+        "Optional list of source packages to specifically target conflicts in. " +
+          "Cannot be used with missinglinkIgnoreSourcePackages."
+      )
+
     val missinglinkIgnoreDestinationPackages: SettingKey[Seq[IgnoredPackage]] =
       settingKey[Seq[IgnoredPackage]](
         "Optional list of packages to ignore conflicts where the destination/called-side " +
           "of the conflict is in one of the specified packages."
+      )
+
+    val missinglinkTargetDestinationPackages: SettingKey[Seq[TargetedPackage]] =
+      settingKey[Seq[TargetedPackage]](
+        "Optional list of source packages to specifically target conflicts in. " +
+          "Cannot be used with missinglinkIgnoreDestinationPackages."
       )
 
     val missinglinkExcludedDependencies =
@@ -66,12 +84,24 @@ object MissingLinkPlugin extends AutoPlugin {
         val failOnConflicts = missinglinkFailOnConflicts.value
         val ignoreSourcePackages = missinglinkIgnoreSourcePackages.value
         val ignoreDestinationPackages = missinglinkIgnoreDestinationPackages.value
+        val targetSourcePackages = missinglinkTargetSourcePackages.value
+        val targetDestinationPackages = missinglinkTargetDestinationPackages.value
+
+        assert(
+          ignoreSourcePackages.isEmpty || targetSourcePackages.isEmpty,
+          "ignoreSourcePackages and targetSourcePackages cannot be defined in the same project.")
+
+        assert(
+          ignoreDestinationPackages.isEmpty || targetDestinationPackages.isEmpty,
+          "ignoreDestinationPackages and targetDestinationPackages cannot be defined in the same project.")
+
         val filter =
           missinglinkExcludedDependencies.value.foldLeft[ModuleFilter](_ => true)((k, v) => k - v)
 
         val conflicts = loadArtifactsAndCheckConflicts(cp, classDir, filter, log)
         val filteredConflicts =
-          filterConflicts(conflicts, ignoreSourcePackages, ignoreDestinationPackages, log)
+          filterConflicts(
+            conflicts, ignoreSourcePackages ++ targetSourcePackages, ignoreDestinationPackages ++ targetDestinationPackages, log)
 
         if (filteredConflicts.nonEmpty) {
           val initialTotal = conflicts.length
@@ -100,7 +130,9 @@ object MissingLinkPlugin extends AutoPlugin {
   override def globalSettings: Seq[Def.Setting[_]] = Seq(
     missinglinkFailOnConflicts := true,
     missinglinkIgnoreSourcePackages := Nil,
+    missinglinkTargetSourcePackages := Nil,
     missinglinkIgnoreDestinationPackages := Nil,
+    missinglinkTargetDestinationPackages := Nil,
     missinglinkExcludedDependencies := Nil,
   )
 
@@ -212,32 +244,29 @@ object MissingLinkPlugin extends AutoPlugin {
 
   private def filterConflicts(
     conflicts: Seq[Conflict],
-    ignoreSourcePackages: Seq[IgnoredPackage],
-    ignoreDestinationPackages: Seq[IgnoredPackage],
+    sourceFilters: Seq[PackageFilter],
+    destinationFilters: Seq[PackageFilter],
     log: Logger
   ): Seq[Conflict] = {
 
     def filter(
-      ignoredPackages: Seq[IgnoredPackage],
+      packageFilters: Seq[PackageFilter],
       name: String,
       setting: String,
       field: Dependency => ClassTypeDescriptor
     ): Seq[Conflict] => Seq[Conflict] = { input =>
-      if (ignoredPackages.nonEmpty) {
-        log.debug(s"Ignoring $name packages: ${ignoredPackages.mkString(", ")}")
+      if (packageFilters.nonEmpty) {
+        log.debug(s"Applying filters on $name packages: ${packageFilters.mkString(", ")}")
 
-        def isIgnored(conflict: Conflict): Boolean = {
+        def isFiltered(conflict: Conflict): Boolean = {
           val descriptor = field(conflict.dependency())
           val className = descriptor.getClassName.replace('/', '.')
           val conflictPackageName = className.substring(0, className.lastIndexOf('.'))
 
-          ignoredPackages.exists { p =>
-            conflictPackageName == p.name ||
-            (p.ignoreSubpackages && conflictPackageName.startsWith(p.name + "."))
-          }
+          packageFilters.map(_.toFilter).exists(_.apply(conflictPackageName))
         }
 
-        val filtered = input.filterNot(isIgnored)
+        val filtered = input.filter(isFiltered)
         val diff = input.length - filtered.length
 
         if (diff != 0) {
@@ -256,8 +285,14 @@ object MissingLinkPlugin extends AutoPlugin {
     }
 
     val filters = List(
-      filter(ignoreSourcePackages, "source", "ignoreSourcePackages", _.fromClass),
-      filter(ignoreDestinationPackages, "destination", "ignoreDestinationPackages", _.targetClass)
+      filter(
+        sourceFilters.collect { case p: IgnoredPackage => p }, "source", "ignoreSourcePackages", _.fromClass),
+      filter(
+        sourceFilters.collect { case p: TargetedPackage => p }, "source", "targetSourcePackages", _.fromClass),
+      filter(
+        destinationFilters.collect { case p: IgnoredPackage => p }, "destination", "ignoreSourcePackages", _.targetClass),
+      filter(
+        destinationFilters.collect { case p: TargetedPackage => p }, "destination", "targetDestinationPackages", _.targetClass)
     )
 
     Function.chain(filters).apply(conflicts)
@@ -317,4 +352,7 @@ object MissingLinkPlugin extends AutoPlugin {
 
   private final case class ModuleArtifact(artifact: Artifact, module: Option[ModuleID])
 
+  private[sbtmissinglink] sealed trait PackageFilter {
+    def toFilter: String => Boolean
+  }
 }
