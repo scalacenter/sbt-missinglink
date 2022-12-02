@@ -6,7 +6,9 @@ import sbt.librarymanagement.ModuleFilter
 import sbt.plugins.JvmPlugin
 
 import java.io.FileInputStream
+
 import scala.collection.JavaConverters._
+
 import com.spotify.missinglink.{ArtifactLoader, Conflict, ConflictChecker, Java9ModuleLoader}
 import com.spotify.missinglink.Conflict.ConflictCategory
 import com.spotify.missinglink.datamodel.{
