@@ -228,8 +228,10 @@ object MissingLinkPlugin extends AutoPlugin {
       .build()
   }
 
-  private def loadClass(f: File): DeclaredClass =
-    com.spotify.missinglink.ClassLoader.load(new FileInputStream(f))
+  private def loadClass(f: File): DeclaredClass = {
+    val is = new FileInputStream(f)
+    try com.spotify.missinglink.ClassLoader.load(is) finally is.close()
+  }
 
   private def loadBootstrapArtifacts(bootstrapClasspath: String, log: Logger): List[Artifact] = {
     if (bootstrapClasspath == null) {
