@@ -84,20 +84,15 @@ object MissingLinkPlugin extends AutoPlugin {
         val log = streams.value.log
 
         val cp = fullClasspath.value
-        val classDir = (classDirectory in Compile).value
+        val classDir = (Compile / classDirectory).value
         val failOnConflicts = missinglinkFailOnConflicts.value
-        val ignoreSourcePackages = missinglinkIgnoreSourcePackages.value
-        val ignoreDestinationPackages = missinglinkIgnoreDestinationPackages.value
-        val targetSourcePackages = missinglinkTargetSourcePackages.value
-        val targetDestinationPackages = missinglinkTargetDestinationPackages.value
-
         assert(
-          ignoreSourcePackages.isEmpty || targetSourcePackages.isEmpty,
+          missinglinkIgnoreSourcePackages.value.isEmpty || missinglinkTargetSourcePackages.value.isEmpty,
           "ignoreSourcePackages and targetSourcePackages cannot be defined in the same project."
         )
 
         assert(
-          ignoreDestinationPackages.isEmpty || targetDestinationPackages.isEmpty,
+          missinglinkIgnoreDestinationPackages.value.isEmpty || missinglinkTargetDestinationPackages.value.isEmpty,
           "ignoreDestinationPackages and targetDestinationPackages cannot be defined in the same project."
         )
 
@@ -105,13 +100,34 @@ object MissingLinkPlugin extends AutoPlugin {
           missinglinkExcludedDependencies.value.foldLeft[ModuleFilter](_ => true)((k, v) => k - v)
 
         val conflicts = loadArtifactsAndCheckConflicts(cp, classDir, filter, log)
-        val filteredConflicts =
-          filterConflicts(
-            conflicts,
-            ignoreSourcePackages ++ targetSourcePackages,
-            ignoreDestinationPackages ++ targetDestinationPackages,
-            log
-          )
+        
+        val conflictFilters = filterConflicts(
+          missinglinkIgnoreSourcePackages.value,
+          "source",
+          missinglinkIgnoreSourcePackages,
+          _.fromClass,
+          log,
+        ) andThen filterConflicts(
+          missinglinkTargetSourcePackages.value,
+          "source",
+          missinglinkTargetSourcePackages,
+          _.fromClass,
+          log,
+        ) andThen filterConflicts(
+          missinglinkIgnoreDestinationPackages.value,
+          "destination",
+          missinglinkIgnoreDestinationPackages,
+          _.targetClass,
+          log,
+        ) andThen filterConflicts(
+          missinglinkTargetDestinationPackages.value,
+          "destination",
+          missinglinkTargetDestinationPackages,
+          _.targetClass,
+          log,
+        )
+
+        val filteredConflicts = conflictFilters(conflicts)
 
         if (filteredConflicts.nonEmpty) {
           val initialTotal = conflicts.length
@@ -249,79 +265,43 @@ object MissingLinkPlugin extends AutoPlugin {
       ModuleArtifact(artifactLoader.load(f.data), f.get(moduleID.key))
     }
 
-    cp.filter(c => isValid(c.data)).map(fileToArtifact(_)).toList
+    cp.filter(c => isValid(c.data)).map(fileToArtifact).toList
   }
 
   private def filterConflicts(
-    conflicts: Seq[Conflict],
-    sourceFilters: Seq[PackageFilter],
-    destinationFilters: Seq[PackageFilter],
-    log: Logger
-  ): Seq[Conflict] = {
+    packageFilters: Seq[PackageFilter],
+    name: String,
+    setting: SettingKey[_],
+    field: Dependency => ClassTypeDescriptor,
+    log: Logger,
+  ): Seq[Conflict] => Seq[Conflict] = { input =>
+    if (packageFilters.nonEmpty) {
+      log.debug(s"Applying filters on $name packages: ${packageFilters.mkString(", ")}")
 
-    def filter(
-      packageFilters: Seq[PackageFilter],
-      name: String,
-      setting: String,
-      field: Dependency => ClassTypeDescriptor
-    ): Seq[Conflict] => Seq[Conflict] = { input =>
-      if (packageFilters.nonEmpty) {
-        log.debug(s"Applying filters on $name packages: ${packageFilters.mkString(", ")}")
+      def isFiltered(conflict: Conflict): Boolean = {
+        val descriptor = field(conflict.dependency())
+        val className = descriptor.getClassName.replace('/', '.')
+        val conflictPackageName = className.substring(0, className.lastIndexOf('.'))
 
-        def isFiltered(conflict: Conflict): Boolean = {
-          val descriptor = field(conflict.dependency())
-          val className = descriptor.getClassName.replace('/', '.')
-          val conflictPackageName = className.substring(0, className.lastIndexOf('.'))
-
-          packageFilters.exists(_.apply(conflictPackageName))
-        }
-
-        val filtered = input.filter(isFiltered)
-        val diff = input.length - filtered.length
-
-        if (diff != 0) {
-          log.info(
-            s"""
-            |$diff conflicts found in ignored $name packages.
-            |Run plugin again without the '$setting' configuration to see all conflicts that were found.
-             """.stripMargin
-          )
-        }
-
-        filtered
-      } else {
-        input
+        packageFilters.exists(_.apply(conflictPackageName))
       }
+
+      val filtered = input.filter(isFiltered)
+      val diff = input.length - filtered.length
+
+      if (diff != 0) {
+        log.info(
+          s"""
+            |$diff conflicts found in ignored $name packages.
+            |Run plugin again without the '${setting.key.label}' setting to see all conflicts that were found.
+             """.stripMargin
+        )
+      }
+
+      filtered
+    } else {
+      input
     }
-
-    val filters = List(
-      filter(
-        sourceFilters.collect { case p: IgnoredPackage => p },
-        "source",
-        "ignoreSourcePackages",
-        _.fromClass
-      ),
-      filter(
-        sourceFilters.collect { case p: TargetedPackage => p },
-        "source",
-        "targetSourcePackages",
-        _.fromClass
-      ),
-      filter(
-        destinationFilters.collect { case p: IgnoredPackage => p },
-        "destination",
-        "ignoreSourcePackages",
-        _.targetClass
-      ),
-      filter(
-        destinationFilters.collect { case p: TargetedPackage => p },
-        "destination",
-        "targetDestinationPackages",
-        _.targetClass
-      )
-    )
-
-    Function.chain(filters).apply(conflicts)
   }
 
   private def outputConflicts(conflicts: Seq[Conflict], log: Logger): Unit = {
@@ -378,5 +358,7 @@ object MissingLinkPlugin extends AutoPlugin {
 
   private final case class ModuleArtifact(artifact: Artifact, module: Option[ModuleID])
 
-  private[sbtmissinglink] sealed trait PackageFilter extends (String => Boolean)
+  private[sbtmissinglink] sealed trait PackageFilter {
+    def apply(name: String): Boolean
+  }
 }
