@@ -29,11 +29,20 @@ object MissingLinkPlugin extends AutoPlugin {
       override def apply(packageName: String): Boolean =
         packageName != name && (!ignoreSubpackages || !packageName.startsWith(s"$name."))
     }
+    private[sbtmissinglink] implicit object IgnoredPackages extends PackageFilters[IgnoredPackage] {
+      def apply(name: String)(filters: Seq[IgnoredPackage]): Boolean = filters.forall(_.apply(name))
+    }
 
     final case class TargetedPackage(name: String, targetSubpackages: Boolean = true)
         extends PackageFilter {
       override def apply(packageName: String): Boolean =
         packageName == name || (targetSubpackages && packageName.startsWith(s"$name."))
+    }
+
+    private[sbtmissinglink] implicit object TargetedPackages
+        extends PackageFilters[TargetedPackage] {
+      def apply(name: String)(filters: Seq[TargetedPackage]): Boolean =
+        filters.exists(_.apply(name))
     }
 
     val missinglinkCheck: TaskKey[Unit] =
@@ -100,31 +109,31 @@ object MissingLinkPlugin extends AutoPlugin {
           missinglinkExcludedDependencies.value.foldLeft[ModuleFilter](_ => true)((k, v) => k - v)
 
         val conflicts = loadArtifactsAndCheckConflicts(cp, classDir, filter, log)
-        
+
         val conflictFilters = filterConflicts(
           missinglinkIgnoreSourcePackages.value,
-          "source",
           missinglinkIgnoreSourcePackages,
-          _.fromClass,
           log,
+          "source",
+          _.fromClass,
         ) andThen filterConflicts(
           missinglinkTargetSourcePackages.value,
-          "source",
           missinglinkTargetSourcePackages,
-          _.fromClass,
           log,
+          "source",
+          _.fromClass,
         ) andThen filterConflicts(
           missinglinkIgnoreDestinationPackages.value,
-          "destination",
           missinglinkIgnoreDestinationPackages,
-          _.targetClass,
           log,
+          "destination",
+          _.targetClass,
         ) andThen filterConflicts(
           missinglinkTargetDestinationPackages.value,
-          "destination",
           missinglinkTargetDestinationPackages,
-          _.targetClass,
           log,
+          "destination",
+          _.targetClass,
         )
 
         val filteredConflicts = conflictFilters(conflicts)
@@ -230,7 +239,8 @@ object MissingLinkPlugin extends AutoPlugin {
 
   private def loadClass(f: File): DeclaredClass = {
     val is = new FileInputStream(f)
-    try com.spotify.missinglink.ClassLoader.load(is) finally is.close()
+    try com.spotify.missinglink.ClassLoader.load(is)
+    finally is.close()
   }
 
   private def loadBootstrapArtifacts(bootstrapClasspath: String, log: Logger): List[Artifact] = {
@@ -270,13 +280,13 @@ object MissingLinkPlugin extends AutoPlugin {
     cp.filter(c => isValid(c.data)).map(fileToArtifact).toList
   }
 
-  private def filterConflicts(
-    packageFilters: Seq[PackageFilter],
-    name: String,
+  private def filterConflicts[T <: PackageFilter](
+    packageFilters: Seq[T],
     setting: SettingKey[_],
-    field: Dependency => ClassTypeDescriptor,
     log: Logger,
-  ): Seq[Conflict] => Seq[Conflict] = { input =>
+    name: String,
+    field: Dependency => ClassTypeDescriptor,
+  )(implicit pfs: PackageFilters[T]): Seq[Conflict] => Seq[Conflict] = { input =>
     if (packageFilters.nonEmpty) {
       log.debug(s"Applying filters on $name packages: ${packageFilters.mkString(", ")}")
 
@@ -285,7 +295,7 @@ object MissingLinkPlugin extends AutoPlugin {
         val className = descriptor.getClassName.replace('/', '.')
         val conflictPackageName = className.substring(0, className.lastIndexOf('.'))
 
-        packageFilters.exists(_.apply(conflictPackageName))
+        pfs.apply(conflictPackageName)(packageFilters)
       }
 
       val filtered = input.filter(isFiltered)
@@ -294,7 +304,7 @@ object MissingLinkPlugin extends AutoPlugin {
       if (diff != 0) {
         log.info(
           s"""
-            |$diff conflicts found in ignored $name packages.
+            |$diff conflicts found in ignored ${name} packages.
             |Run plugin again without the '${setting.key.label}' setting to see all conflicts that were found.
              """.stripMargin
         )
@@ -362,5 +372,8 @@ object MissingLinkPlugin extends AutoPlugin {
 
   private[sbtmissinglink] sealed trait PackageFilter {
     def apply(name: String): Boolean
+  }
+  private[sbtmissinglink] trait PackageFilters[T <: PackageFilter] {
+    def apply(name: String)(filters: Seq[T]): Boolean
   }
 }

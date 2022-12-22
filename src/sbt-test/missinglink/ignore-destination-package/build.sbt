@@ -14,5 +14,6 @@ lazy val `ignore-destination-package` = project
     // Speed up compilation a bit. Our .java files do not need to see the .scala files.
     compileOrder := CompileOrder.JavaThenScala,
 
-    missinglinkIgnoreDestinationPackages += IgnoredPackage("com.google.common")
+    missinglinkIgnoreDestinationPackages += IgnoredPackage("com.google.common"),
+    missinglinkIgnoreDestinationPackages += IgnoredPackage("whatever"),
   )
