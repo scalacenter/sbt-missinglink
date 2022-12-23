@@ -14,5 +14,6 @@ lazy val `ignore-source-package` = project
     // Speed up compilation a bit. Our .java files do not need to see the .scala files.
     compileOrder := CompileOrder.JavaThenScala,
 
-    missinglinkIgnoreSourcePackages += IgnoredPackage("test")
+    missinglinkIgnoreSourcePackages += IgnoredPackage("test"),
+    missinglinkIgnoreSourcePackages += IgnoredPackage("whatever"),
   )
