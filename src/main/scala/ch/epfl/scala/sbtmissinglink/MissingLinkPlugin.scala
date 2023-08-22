@@ -51,6 +51,9 @@ object MissingLinkPlugin extends AutoPlugin {
     val missinglinkFailOnConflicts: SettingKey[Boolean] =
       settingKey[Boolean]("Fail the build if any conflicts are found")
 
+    val missinglinkScanDependencies: SettingKey[Boolean] =
+      settingKey[Boolean]("Also scan all dependencies")
+
     val missinglinkIgnoreSourcePackages: SettingKey[Seq[IgnoredPackage]] =
       settingKey[Seq[IgnoredPackage]](
         "Optional list of packages to ignore conflicts where the source of the conflict " +
@@ -95,6 +98,7 @@ object MissingLinkPlugin extends AutoPlugin {
         val cp = fullClasspath.value
         val classDir = (Compile / classDirectory).value
         val failOnConflicts = missinglinkFailOnConflicts.value
+        val scanDependencies = missinglinkScanDependencies.value
         assert(
           missinglinkIgnoreSourcePackages.value.isEmpty || missinglinkTargetSourcePackages.value.isEmpty,
           "ignoreSourcePackages and targetSourcePackages cannot be defined in the same project."
@@ -108,7 +112,7 @@ object MissingLinkPlugin extends AutoPlugin {
         val filter =
           missinglinkExcludedDependencies.value.foldLeft[ModuleFilter](_ => true)((k, v) => k - v)
 
-        val conflicts = loadArtifactsAndCheckConflicts(cp, classDir, filter, log)
+        val conflicts = loadArtifactsAndCheckConflicts(cp, classDir, scanDependencies, filter, log)
 
         val conflictFilters = filterConflicts(
           missinglinkIgnoreSourcePackages.value,
@@ -164,6 +168,7 @@ object MissingLinkPlugin extends AutoPlugin {
 
   override def globalSettings: Seq[Def.Setting[_]] = Seq(
     missinglinkFailOnConflicts := true,
+    missinglinkScanDependencies := false,
     missinglinkIgnoreSourcePackages := Nil,
     missinglinkTargetSourcePackages := Nil,
     missinglinkIgnoreDestinationPackages := Nil,
@@ -180,6 +185,7 @@ object MissingLinkPlugin extends AutoPlugin {
   private def loadArtifactsAndCheckConflicts(
     cp: Classpath,
     classDirectory: File,
+    scanDependencies: Boolean,
     excluded: ModuleFilter,
     log: Logger
   ): Seq[Conflict] = {
@@ -195,7 +201,14 @@ object MissingLinkPlugin extends AutoPlugin {
       .filter(f => f.module.fold(true)(excluded))
       .map(_.artifact)
 
-    val projectArtifact = toArtifact(classDirectory)
+    val projectArtifact =
+      if (scanDependencies)
+        new ArtifactBuilder()
+          .name(new ArtifactName("project"))
+          .classes(runtimeArtifactsAfterExclusions.flatMap(_.classes.asScala).toMap.asJava)
+          .build()
+      else
+        toArtifact(classDirectory)
 
     if (projectArtifact.classes().isEmpty()) {
       log.warn(
