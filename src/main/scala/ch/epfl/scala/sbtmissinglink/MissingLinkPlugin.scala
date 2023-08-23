@@ -8,6 +8,7 @@ import sbt.plugins.JvmPlugin
 import java.io.FileInputStream
 
 import scala.collection.JavaConverters._
+import scala.collection.immutable.Map
 
 import com.spotify.missinglink.{ArtifactLoader, Conflict, ConflictChecker, Java9ModuleLoader}
 import com.spotify.missinglink.Conflict.ConflictCategory
@@ -203,10 +204,7 @@ object MissingLinkPlugin extends AutoPlugin {
 
     val projectArtifact =
       if (scanDependencies)
-        new ArtifactBuilder()
-          .name(new ArtifactName("project"))
-          .classes(runtimeArtifactsAfterExclusions.flatMap(_.classes.asScala).toMap.asJava)
-          .build()
+        classesToArtifact(runtimeArtifactsAfterExclusions.flatMap(_.classes.asScala).toMap)
       else
         toArtifact(classDirectory)
 
@@ -242,11 +240,14 @@ object MissingLinkPlugin extends AutoPlugin {
         .map(loadClass)
         .map(c => c.className() -> c)
         .toMap
-        .asJava
 
+    classesToArtifact(classes)
+  }
+
+  private def classesToArtifact(classes: Map[ClassTypeDescriptor, DeclaredClass]): Artifact = {
     new ArtifactBuilder()
       .name(new ArtifactName("project"))
-      .classes(classes)
+      .classes(classes.asJava)
       .build()
   }
 
