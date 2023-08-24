@@ -8,6 +8,7 @@ import sbt.plugins.JvmPlugin
 import java.io.FileInputStream
 
 import scala.collection.JavaConverters._
+import scala.collection.immutable.Map
 
 import com.spotify.missinglink.{ArtifactLoader, Conflict, ConflictChecker, Java9ModuleLoader}
 import com.spotify.missinglink.Conflict.ConflictCategory
@@ -50,6 +51,9 @@ object MissingLinkPlugin extends AutoPlugin {
 
     val missinglinkFailOnConflicts: SettingKey[Boolean] =
       settingKey[Boolean]("Fail the build if any conflicts are found")
+
+    val missinglinkScanDependencies: SettingKey[Boolean] =
+      settingKey[Boolean]("Also scan all dependencies")
 
     val missinglinkIgnoreSourcePackages: SettingKey[Seq[IgnoredPackage]] =
       settingKey[Seq[IgnoredPackage]](
@@ -95,6 +99,7 @@ object MissingLinkPlugin extends AutoPlugin {
         val cp = fullClasspath.value
         val classDir = (Compile / classDirectory).value
         val failOnConflicts = missinglinkFailOnConflicts.value
+        val scanDependencies = missinglinkScanDependencies.value
         assert(
           missinglinkIgnoreSourcePackages.value.isEmpty || missinglinkTargetSourcePackages.value.isEmpty,
           "ignoreSourcePackages and targetSourcePackages cannot be defined in the same project."
@@ -108,7 +113,7 @@ object MissingLinkPlugin extends AutoPlugin {
         val filter =
           missinglinkExcludedDependencies.value.foldLeft[ModuleFilter](_ => true)((k, v) => k - v)
 
-        val conflicts = loadArtifactsAndCheckConflicts(cp, classDir, filter, log)
+        val conflicts = loadArtifactsAndCheckConflicts(cp, classDir, scanDependencies, filter, log)
 
         val conflictFilters = filterConflicts(
           missinglinkIgnoreSourcePackages.value,
@@ -164,6 +169,7 @@ object MissingLinkPlugin extends AutoPlugin {
 
   override def globalSettings: Seq[Def.Setting[_]] = Seq(
     missinglinkFailOnConflicts := true,
+    missinglinkScanDependencies := false,
     missinglinkIgnoreSourcePackages := Nil,
     missinglinkTargetSourcePackages := Nil,
     missinglinkIgnoreDestinationPackages := Nil,
@@ -180,6 +186,7 @@ object MissingLinkPlugin extends AutoPlugin {
   private def loadArtifactsAndCheckConflicts(
     cp: Classpath,
     classDirectory: File,
+    scanDependencies: Boolean,
     excluded: ModuleFilter,
     log: Logger
   ): Seq[Conflict] = {
@@ -195,7 +202,11 @@ object MissingLinkPlugin extends AutoPlugin {
       .filter(f => f.module.fold(true)(excluded))
       .map(_.artifact)
 
-    val projectArtifact = toArtifact(classDirectory)
+    val projectArtifact =
+      if (scanDependencies)
+        classesToArtifact(runtimeArtifactsAfterExclusions.flatMap(_.classes.asScala).toMap)
+      else
+        toArtifact(classDirectory)
 
     if (projectArtifact.classes().isEmpty()) {
       log.warn(
@@ -229,11 +240,14 @@ object MissingLinkPlugin extends AutoPlugin {
         .map(loadClass)
         .map(c => c.className() -> c)
         .toMap
-        .asJava
 
+    classesToArtifact(classes)
+  }
+
+  private def classesToArtifact(classes: Map[ClassTypeDescriptor, DeclaredClass]): Artifact = {
     new ArtifactBuilder()
       .name(new ArtifactName("project"))
-      .classes(classes)
+      .classes(classes.asJava)
       .build()
   }
 
