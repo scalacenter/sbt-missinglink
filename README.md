@@ -15,7 +15,7 @@ You can find the latest `missinglink-core` version [in their release list](https
 
 | `sbt-missinglink` | `missinglink-core` |
 | :---: | :---: |
-| ![sbt-missinglink badge](https://maven-badges.herokuapp.com/maven-central/ch.epfl.scala/sbt-missinglink/badge.svg) | ![missinglink-core badge](https://maven-badges.herokuapp.com/maven-central/com.spotify/missinglink-core/badge.svg) |
+| ![sbt-missinglink badge](https://maven-badges.sml.io/maven-central/ch.epfl.scala/sbt-missinglink/badge.svg) | ![missinglink-core badge](https://maven-badges.sml.io/maven-central/com.spotify/missinglink-core/badge.svg) |
 
 Then, run the following task for the project you want to test:
 
