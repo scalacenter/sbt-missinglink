@@ -8,14 +8,17 @@ Add the following lines in `project/plugins.sbt`:
 
 ```scala
 addSbtPlugin("ch.epfl.scala" % "sbt-missinglink" % "<sbt-missinglink-version>")
-libraryDependencies += "com.spotify" % "missinglink-core" % "<missinglink-core-version>"
+libraryDependencies ++= List(
+  "com.spotify" % "missinglink-core" % "<missinglink-core-version>",
+  "org.ow2.asm" % "asm-tree" % "<asm-tree-version>",
+)
 ```
 
 You can find the latest `missinglink-core` version [in their release list](https://github.com/spotify/missinglink/releases).
 
-| `sbt-missinglink` | `missinglink-core` |
-| :---: | :---: |
-| ![sbt-missinglink badge](https://maven-badges.sml.io/sonatype-central/ch.epfl.scala/sbt-missinglink/badge.svg) | ![missinglink-core badge](https://maven-badges.sml.io/sonatype-central/com.spotify/missinglink-core/badge.svg) |
+| `sbt-missinglink` | `missinglink-core` | `asm-tree` |
+| :---: | :---: | :---: |
+| [![sbt-missinglink badge](https://maven-badges.sml.io/sonatype-central/ch.epfl.scala/sbt-missinglink/badge.svg)](https://central.sonatype.com/artifact/ch.epfl.scala/sbt-missinglink) | [![missinglink-core badge](https://maven-badges.sml.io/sonatype-central/com.spotify/missinglink-core/badge.svg)](https://central.sonatype.com/artifact/com.spotify/missinglink-core) | [![asm-tree badge](https://maven-badges.sml.io/sonatype-central/org.ow2.asm/asm-tree/badge.svg)](https://central.sonatype.com/artifact/org.ow2.asm/asm-tree) |
 
 Then, run the following task for the project you want to test:
 
