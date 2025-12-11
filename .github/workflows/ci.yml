@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        javaversion: ["8", "11", "17"]
+        javaversion: ["8", "11", "17", "21", "25"]
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-java@v5
