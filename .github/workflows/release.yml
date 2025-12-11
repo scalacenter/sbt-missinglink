@@ -11,11 +11,11 @@ jobs:
       - uses: actions/checkout@v2.4.0
         with:
           fetch-depth: 0
-      - uses: olafurpg/setup-scala@v13
+      - uses: actions/setup-java@v5
         with:
-          java-version: adopt@1.8
-      - name: Coursier cache
-        uses: coursier/cache-action@v6
+          distribution: temurin
+          java-version: 8
+          cache: "sbt"
       - name: sbt ci-release ${{ github.ref }}
         run: sbt ci-release
         env:
