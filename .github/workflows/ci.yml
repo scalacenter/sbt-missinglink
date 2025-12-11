@@ -21,11 +21,11 @@ jobs:
           java-version: ${{ matrix.javaversion }}
           cache: "sbt"
       - name: Formatting
-        run: sbt scalafmtSbtCheck scalafmtCheck
+        run: ./sbt scalafmtSbtCheck scalafmtCheck
       - name: Scripted tests
-        run: sbt scripted
+        run: ./sbt scripted
       - name: Test generate documentation
-        run: sbt doc
+        run: ./sbt doc
   ci:
     runs-on: ubuntu-20.04
     needs: [ build ]
