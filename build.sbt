@@ -21,7 +21,8 @@ lazy val `sbt-missinglink` = project
   .enablePlugins(SbtPlugin)
   .settings(
     libraryDependencies ++= Seq(
-      "com.spotify" % "missinglink-core" % "0.2.11"
+      "com.spotify" % "missinglink-core" % "0.2.11",
+      "org.ow2.asm" % "asm-tree" % "9.9"
     ),
     // configuration fro scripted
     scriptedLaunchOpts := {
