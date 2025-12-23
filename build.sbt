@@ -1,6 +1,6 @@
 inThisBuild(
   Def.settings(
-    scalaVersion := "2.12.19",
+    scalaVersion := "2.12.21",
     organization := "ch.epfl.scala",
     homepage := Some(url("https://github.com/scalacenter/sbt-missinglink")),
     licenses += ("BSD New",
@@ -21,7 +21,8 @@ lazy val `sbt-missinglink` = project
   .enablePlugins(SbtPlugin)
   .settings(
     libraryDependencies ++= Seq(
-      "com.spotify" % "missinglink-core" % "0.2.11"
+      "com.spotify" % "missinglink-core" % "0.2.11",
+      "org.ow2.asm" % "asm-tree" % "9.9"
     ),
     // configuration fro scripted
     scriptedLaunchOpts := {
