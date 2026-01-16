@@ -12,22 +12,24 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        javaversion: ["adopt@1.8", "adopt@1.11", "17"]
+        javaversion: ["8", "11", "17", "21", "25"]
     steps:
       - uses: actions/checkout@v2
-      - uses: olafurpg/setup-scala@v10
+      - uses: actions/setup-java@v5
         with:
+          distribution: temurin
           java-version: ${{ matrix.javaversion }}
-      - uses: coursier/cache-action@v5
+          cache: "sbt"
       - name: Formatting
-        run: sbt scalafmtSbtCheck scalafmtCheck
+        run: ./sbt scalafmtSbtCheck scalafmtCheck
       - name: Scripted tests
-        run: sbt scripted
+        run: ./sbt scripted
       - name: Test generate documentation
-        run: sbt doc
+        run: ./sbt doc
   ci:
     runs-on: ubuntu-20.04
     needs: [ build ]
     steps:
-      - name: Aggregate of lint, and all tests
-        run: echo "ci passed"
+      - uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
