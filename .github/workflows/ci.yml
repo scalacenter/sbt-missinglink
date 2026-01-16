@@ -27,7 +27,8 @@ jobs:
       - name: Test generate documentation
         run: ./sbt doc
   ci:
-    runs-on: ubuntu-20.04
+    if: always()
+    runs-on: ubuntu-latest
     needs: [ build ]
     steps:
       - uses: re-actors/alls-green@release/v1
