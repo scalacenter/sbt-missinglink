@@ -14,18 +14,19 @@ jobs:
       matrix:
         javaversion: ["8", "11", "17", "21", "25"]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v6
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: ${{ matrix.javaversion }}
           cache: "sbt"
+      - uses: sbt/setup-sbt@v1
       - name: Formatting
-        run: ./sbt scalafmtSbtCheck scalafmtCheck
+        run: sbt scalafmtSbtCheck scalafmtCheck
       - name: Scripted tests
-        run: ./sbt scripted
+        run: sbt scripted
       - name: Test generate documentation
-        run: ./sbt doc
+        run: sbt doc
   ci:
     if: always()
     runs-on: ubuntu-latest
