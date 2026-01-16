@@ -24,7 +24,6 @@ lazy val `sbt-missinglink` = project
       "com.spotify" % "missinglink-core" % "0.2.11",
       "org.ow2.asm" % "asm-tree" % "9.9"
     ),
-    // configuration fro scripted
     scriptedLaunchOpts := {
       scriptedLaunchOpts.value ++
         Seq("-Xmx1024M", "-Dplugin.version=" + version.value)
