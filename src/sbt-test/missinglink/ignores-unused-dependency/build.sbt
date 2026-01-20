@@ -1,7 +1,9 @@
-inThisBuild(Def.settings(
-  version := "0.1.0",
-  scalaVersion := "2.12.21",
-))
+inThisBuild(
+  Def.settings(
+    version := "0.1.0",
+    scalaVersion := "2.13.18",
+  )
+)
 
 lazy val `has-problematic-dependency` = project
   .in(file("has-problematic-dependency"))
