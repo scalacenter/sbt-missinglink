@@ -184,11 +184,11 @@ object MissingLinkPlugin extends AutoPlugin {
   }
 
   private def loadArtifactsAndCheckConflicts(
-    cp: Classpath,
-    classDirectory: File,
-    scanDependencies: Boolean,
-    excluded: ModuleFilter,
-    log: Logger
+      cp: Classpath,
+      classDirectory: File,
+      scanDependencies: Boolean,
+      excluded: ModuleFilter,
+      log: Logger
   ): Seq[Conflict] = {
 
     val runtimeProjectArtifacts = constructArtifacts(cp, log)
@@ -295,11 +295,11 @@ object MissingLinkPlugin extends AutoPlugin {
   }
 
   private def filterConflicts[T <: PackageFilter](
-    packageFilters: Seq[T],
-    setting: SettingKey[_],
-    log: Logger,
-    name: String,
-    field: Dependency => ClassTypeDescriptor,
+      packageFilters: Seq[T],
+      setting: SettingKey[_],
+      log: Logger,
+      name: String,
+      field: Dependency => ClassTypeDescriptor,
   )(implicit pfs: PackageFilters[T]): Seq[Conflict] => Seq[Conflict] = { input =>
     if (packageFilters.nonEmpty) {
       log.debug(s"Applying filters on $name packages: ${packageFilters.mkString(", ")}")
