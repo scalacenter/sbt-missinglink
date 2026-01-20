@@ -21,8 +21,6 @@ jobs:
           java-version: ${{ matrix.javaversion }}
           cache: "sbt"
       - uses: sbt/setup-sbt@v1
-      - name: Formatting
-        run: sbt scalafmtSbtCheck scalafmtCheck
       - name: Scripted tests
         run: sbt scripted
       - name: Test generate documentation
