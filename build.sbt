@@ -3,8 +3,10 @@ inThisBuild(
     scalaVersion := "2.12.21",
     organization := "ch.epfl.scala",
     homepage := Some(url("https://github.com/scalacenter/sbt-missinglink")),
-    licenses += ("BSD New",
-    url("https://github.com/scalacenter/sbt-missinglink/blob/main/LICENSE")),
+    licenses += (
+      "BSD New",
+      url("https://github.com/scalacenter/sbt-missinglink/blob/main/LICENSE")
+    ),
     developers := List(
       Developer(
         "sjrd",
