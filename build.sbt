@@ -22,6 +22,24 @@ lazy val `sbt-missinglink` = project
   .in(file("."))
   .enablePlugins(SbtPlugin)
   .settings(
+    crossScalaVersions += "3.8.1",
+    scalacOptions ++= {
+      scalaBinaryVersion.value match {
+        case "2.12" =>
+          Seq("-release:8")
+        case _ =>
+          Nil
+      }
+    },
+    pluginCrossBuild / sbtVersion := {
+      scalaBinaryVersion.value match {
+        case "2.12" =>
+          (pluginCrossBuild / sbtVersion).value
+        case _ =>
+          "2.0.0-RC9"
+      }
+    },
+    addSbtPlugin("com.github.sbt" % "sbt2-compat" % "0.1.0"),
     libraryDependencies ++= Seq(
       "com.spotify" % "missinglink-core" % "0.2.11",
       "org.ow2.asm" % "asm-tree" % "9.9.1"
