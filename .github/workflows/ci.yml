@@ -22,9 +22,12 @@ jobs:
           cache: "sbt"
       - uses: sbt/setup-sbt@v1
       - name: Formatting
-        run: sbt scalafmtSbtCheck scalafmtCheck
-      - name: Scripted tests
-        run: sbt scripted
+        run: sbt scalafmtSbtCheck "+ scalafmtCheckAll"
+      - name: Scripted tests sbt 1
+        run: sbt "++ 2.12.x" scripted
+      - name: Scripted tests sbt 2
+        run: sbt "++ 3.x" scripted
+        if: ${{ matrix.javaversion != 8 && matrix.javaversion != 11 }}
       - name: Test generate documentation
         run: sbt doc
   ci:

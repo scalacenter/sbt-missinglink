@@ -5,6 +5,8 @@ import sbt.Keys._
 import sbt.librarymanagement.ModuleFilter
 import sbt.plugins.JvmPlugin
 
+import sbtcompat.PluginCompat
+
 import java.io.FileInputStream
 
 import scala.collection.JavaConverters._
@@ -20,6 +22,7 @@ import com.spotify.missinglink.datamodel.{
   DeclaredClass,
   Dependency
 }
+import xsbti.FileConverter
 
 object MissingLinkPlugin extends AutoPlugin {
 
@@ -46,6 +49,7 @@ object MissingLinkPlugin extends AutoPlugin {
         filters.exists(_.apply(name))
     }
 
+    @transient
     val missinglinkCheck: TaskKey[Unit] =
       taskKey[Unit]("Run the missinglink checks")
 
@@ -91,11 +95,12 @@ object MissingLinkPlugin extends AutoPlugin {
   // Make it easy to throttle the concurrency of running missing-link on multiple projects, it consumes a lot of memory
   val missinglinkConflictsTag = Tags.Tag("missinglinkConflicts")
 
-  val configSettings: Seq[Setting[_]] = Def.settings(
+  val configSettings: Seq[Setting[?]] = Def.settings(
     missinglinkCheck := Def
       .task {
         val log = streams.value.log
 
+        implicit val converter: FileConverter = fileConverter.value
         val cp = fullClasspath.value
         val classDir = (Compile / classDirectory).value
         val failOnConflicts = missinglinkFailOnConflicts.value
@@ -167,7 +172,7 @@ object MissingLinkPlugin extends AutoPlugin {
       .value,
   )
 
-  override def globalSettings: Seq[Def.Setting[_]] = Seq(
+  override def globalSettings: Seq[Def.Setting[?]] = Seq(
     missinglinkFailOnConflicts := true,
     missinglinkScanDependencies := false,
     missinglinkIgnoreSourcePackages := Nil,
@@ -177,7 +182,7 @@ object MissingLinkPlugin extends AutoPlugin {
     missinglinkExcludedDependencies := Nil,
   )
 
-  override def projectSettings: Seq[Setting[_]] = {
+  override def projectSettings: Seq[Setting[?]] = {
     inConfig(Compile)(configSettings) ++
       inConfig(Runtime)(configSettings) ++
       inConfig(Test)(configSettings)
@@ -189,6 +194,8 @@ object MissingLinkPlugin extends AutoPlugin {
       scanDependencies: Boolean,
       excluded: ModuleFilter,
       log: Logger
+  )(implicit
+      converter: FileConverter
   ): Seq[Conflict] = {
 
     val runtimeProjectArtifacts = constructArtifacts(cp, log)
@@ -257,13 +264,16 @@ object MissingLinkPlugin extends AutoPlugin {
     finally is.close()
   }
 
-  private def loadBootstrapArtifacts(bootstrapClasspath: String, log: Logger): List[Artifact] = {
+  private def loadBootstrapArtifacts(bootstrapClasspath: String, log: Logger)(implicit
+      converter: FileConverter
+  ): List[Artifact] = {
     if (bootstrapClasspath == null) {
       Java9ModuleLoader.getJava9ModuleArtifacts((s, ex) => log.warn(s)).asScala.toList
     } else {
       val cp = bootstrapClasspath
         .split(System.getProperty("path.separator"))
-        .map(f => Attributed.blank(file(f)))
+        .map(f => Attributed.blank(PluginCompat.toFileRef(file(f))))
+        .toList
 
       constructArtifacts(cp, log).map(_.artifact)
     }
@@ -280,23 +290,28 @@ object MissingLinkPlugin extends AutoPlugin {
     /*}*/
   }
 
-  private def constructArtifacts(cp: Classpath, log: Logger): List[ModuleArtifact] = {
+  private def constructArtifacts(cp: Classpath, log: Logger)(implicit
+      converter: FileConverter
+  ): List[ModuleArtifact] = {
     val artifactLoader = new ArtifactLoader
 
     def isValid(entry: File): Boolean =
       (entry.isFile() && entry.getPath().endsWith(".jar")) || entry.isDirectory()
 
-    def fileToArtifact(f: Attributed[File]): ModuleArtifact = {
+    def fileToArtifact(f: Attributed[PluginCompat.FileRef]): ModuleArtifact = {
       log.debug("loading artifact for path: " + f)
-      ModuleArtifact(artifactLoader.load(f.data), f.get(moduleID.key))
+      ModuleArtifact(
+        artifactLoader.load(PluginCompat.toFile(f.data)),
+        f.get(PluginCompat.moduleIDStr).map(PluginCompat.parseModuleIDStrAttribute)
+      )
     }
 
-    cp.filter(c => isValid(c.data)).map(fileToArtifact).toList
+    cp.filter(c => isValid(PluginCompat.toFile(c.data))).map(fileToArtifact).toList
   }
 
   private def filterConflicts[T <: PackageFilter](
       packageFilters: Seq[T],
-      setting: SettingKey[_],
+      setting: SettingKey[?],
       log: Logger,
       name: String,
       field: Dependency => ClassTypeDescriptor,
