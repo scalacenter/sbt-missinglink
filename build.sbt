@@ -1,6 +1,6 @@
 inThisBuild(
   Def.settings(
-    scalaVersion := "2.12.21",
+    scalaVersion := "2.13.18",
     organization := "ch.epfl.scala",
     homepage := Some(url("https://github.com/scalacenter/sbt-missinglink")),
     licenses += (
