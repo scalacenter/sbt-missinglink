@@ -22,7 +22,7 @@ lazy val `sbt-missinglink` = project
   .in(file("."))
   .enablePlugins(SbtPlugin)
   .settings(
-    crossScalaVersions += "3.8.2",
+    crossScalaVersions += "3.8.4",
     scalacOptions ++= {
       scalaBinaryVersion.value match {
         case "2.12" =>
