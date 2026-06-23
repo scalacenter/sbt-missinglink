@@ -209,8 +209,7 @@ object MissingLinkPlugin extends AutoPlugin {
 
     val runtimeProjectArtifacts = constructArtifacts(cp, log)
 
-    // Map every class to the dependency (JAR / module) that provides it, so a conflict can be
-    // attributed back to the JAR its calling class came from. First occurrence wins.
+    // Map each class to the module that provides it (first wins), to attribute conflicts to a JAR.
     val sourceModules: Map[ClassTypeDescriptor, ModuleID] =
       runtimeProjectArtifacts.foldLeft(Map.empty[ClassTypeDescriptor, ModuleID]) { (acc, ma) =>
         ma.module match {
@@ -440,24 +439,45 @@ object MissingLinkPlugin extends AutoPlugin {
         }
       }
     } else {
-      // Concise, destination-oriented summary: conflicts are described by *what is missing* (not by
-      // which of your JARs makes the call), so the headline and the suppression snippets stay on
-      // the same axis. The advice differs by category (see below).
+      // Per-category counts: exclude calling JARs (missing classes) or realign/ignore (methods/fields).
       val total = conflicts.size
 
       logLine("")
       logLine(s"Missinglink summary: $total ${conflictNoun(total)} found.")
 
+      // Render `<proj>/<setting> ++= List(...)`, one entry per line with its conflict count, highest first.
+      def logSettingList(setting: String, entries: Seq[(String, Int)]): Unit = {
+        val sorted = entries.sortBy { case (entry, count) => (-count, entry) }
+        logLine(s"  <proj>/$setting ++= List(")
+        sorted.zipWithIndex.foreach { case ((entry, count), index) =>
+          val comma = if (index == sorted.size - 1) "" else ","
+          logLine(s"    $entry$comma  // $count ${conflictNoun(count)}")
+        }
+        logLine("  )")
+      }
+
+      // Group conflicts by calling module; project-local callers have no module to exclude.
+      def excludeDependencySnippet(cs: Seq[Conflict]): Unit = {
+        val byModule = cs
+          .flatMap(c => sourceModules.get(c.dependency().fromClass()))
+          .groupBy(m => (m.organization, m.name))
+          .map { case ((org, name), ms) =>
+            s"""moduleFilter(organization = "$org", name = "$name")""" -> ms.size
+          }
+          .toSeq
+        if (byModule.isEmpty)
+          logLine("  (these calls originate in your own project; nothing to exclude)")
+        else
+          logSettingList("missinglinkExcludedDependencies", byModule)
+      }
+
       def packageOf(c: ClassTypeDescriptor): String = {
-        val className = c.getClassName
+        val className = c.getClassName.replace('/', '.')
         val idx = className.lastIndexOf('.')
         if (idx < 0) "" else className.substring(0, idx)
       }
 
-      // Collapse missing packages by true parent/child nesting only: each package folds into the
-      // topmost other package that is its ancestor (IgnoredPackage already covers subpackages).
-      // Siblings such as org.apache.log4j and org.apache.commons.logging stay separate, so a
-      // suggested ignore never reaches beyond something that is actually missing.
+      // Collapse missing packages into the topmost present ancestor (IgnoredPackage covers subpackages).
       def collapsedPackages(cs: Seq[Conflict]): Seq[(String, Int)] = {
         val counts =
           cs.map(c => packageOf(c.dependency().targetClass()))
@@ -473,16 +493,14 @@ object MissingLinkPlugin extends AutoPlugin {
           .toSeq
       }
 
+      // Destination-package ignores filter the conflict list directly, so they reliably suppress
+      // evicted/duplicated classes that dependency exclusion cannot.
       def ignoreDestinationSnippet(packages: Seq[(String, Int)]): Unit =
-        if (packages.nonEmpty) {
-          logLine("  missinglinkIgnoreDestinationPackages ++= List(")
-          packages.sortBy { case (pkg, _) => pkg }.zipWithIndex.foreach {
-            case ((pkg, count), index) =>
-              val comma = if (index == packages.size - 1) "" else ","
-              logLine(s"""    IgnoredPackage("$pkg")$comma  // $count ${conflictNoun(count)}""")
-          }
-          logLine("  )")
-        }
+        if (packages.nonEmpty)
+          logSettingList(
+            "missinglinkIgnoreDestinationPackages",
+            packages.map { case (pkg, count) => s"""IgnoredPackage("$pkg")""" -> count }
+          )
 
       val (classNotFound, signatureNotFound) =
         conflicts.partition(_.category() == ConflictCategory.CLASS_NOT_FOUND)
@@ -493,9 +511,9 @@ object MissingLinkPlugin extends AutoPlugin {
           s"${classNotFound.size} ${conflictNoun(classNotFound.size)} " +
             s"${referenceVerb(classNotFound.size)} classes missing " +
             "from the classpath - usually optional dependencies you do not use. " +
-            "Ignore them by the missing package:"
+            "Exclude the dependencies that reference them:"
         )
-        ignoreDestinationSnippet(collapsedPackages(classNotFound))
+        excludeDependencySnippet(classNotFound)
       }
 
       if (signatureNotFound.nonEmpty) {
@@ -506,8 +524,7 @@ object MissingLinkPlugin extends AutoPlugin {
             "or fields missing from libraries already on your classpath - usually two dependency " +
             "versions disagree and a binary-incompatible one was evicted."
         )
-        // For these the target class is present, so we can name the exact module (and resolved
-        // version) that is missing the member - that is the artifact to realign.
+        // The target class is present, so name the module/version missing the member to realign.
         val culprits =
           signatureNotFound
             .flatMap(c => sourceModules.get(c.dependency().targetClass()))
