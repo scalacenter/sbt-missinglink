@@ -61,6 +61,44 @@ missinglinkIgnoreSourcePackages += IgnoredPackage("com.example")
 
 By default, all subpackages of the specified package are also ignored, but this can be disabled by the `ignoreSubpackages` field: `IgnoredPackage("test", ignoreSubpackages = false)`.
 
+### Understanding the conflict report
+
+By default `missinglinkCheck` prints a concise summary, grouping conflicts by *what is missing*
+(the "destination" side) with ready-to-paste ignore snippets:
+
+```
+Missinglink summary: 228 conflicts found.
+
+109 conflicts reference classes missing from the classpath - usually optional dependencies you do not use. Ignore them by the missing package:
+  missinglinkIgnoreDestinationPackages ++= List(
+    IgnoredPackage("jnr.unixsocket"),  // 11 conflicts
+    IgnoredPackage("org.apache.log4j"),  // 84 conflicts
+    IgnoredPackage("org.bouncycastle.jce.provider"),  // 1 conflict
+    IgnoredPackage("org.conscrypt")  // 13 conflicts
+  )
+
+119 conflicts reference methods or fields missing from libraries already on your classpath - usually two dependency versions disagree and a binary-incompatible one was evicted.
+Check `show <proj>/evicted` and align these versions:
+  - org.slf4j:jcl-over-slf4j:2.0.17  (110 conflicts)
+  - javax.activation:javax.activation-api:1.2.0  (9 conflicts)
+To ignore them instead:
+  missinglinkIgnoreDestinationPackages ++= List(
+    IgnoredPackage("javax.activation"),  // 9 conflicts
+    IgnoredPackage("org.apache.commons.logging")  // 110 conflicts
+  )
+
+Re-run with 'missinglinkVerbose := true' to see the full per-class breakdown (which class references each missing symbol, and from which methods).
+```
+
+The two categories get different advice:
+
+- **Missing classes** (`CLASS_NOT_FOUND`): usually an optional dependency you don't ship — ignore the missing destination package.
+- **Missing methods / fields**: usually a real binary incompatibility — realign the named module/version; ignoring can hide a `NoSuchMethodError`.
+
+Suggested packages collapse only by parent/child nesting (`org.bouncycastle.asn1.cms` →
+`org.bouncycastle.asn1`), never across siblings. Set `missinglinkVerbose := true` for the full
+per-class, per-call-site breakdown.
+
 ### Excluding some dependencies from the analysis
 
 You can exclude certain dependencies using `moduleFilter`:
