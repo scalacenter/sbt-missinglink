@@ -63,39 +63,29 @@ By default, all subpackages of the specified package are also ignored, but this 
 
 ### Understanding the conflict report
 
-By default `missinglinkCheck` prints a concise summary: conflict counts split by category, each
-with a ready-to-paste snippet to silence it:
+By default `missinglinkCheck` reports the total conflict count, then a concise summary: how many
+dependencies are involved, a per-category breakdown of the conflicts, and a single ready-to-paste
+snippet that excludes the dependencies whose code triggers them:
 
 ```
-Missinglink summary: 206 conflicts found.
-
-87 conflicts reference classes missing from the classpath - usually optional dependencies you do not use. Exclude the dependencies that reference them:
-  <proj>/missinglinkExcludedDependencies ++= List(
-    moduleFilter(organization = "io.netty", name = "netty-common"),  // 84 conflicts
-    moduleFilter(organization = "io.opentelemetry", name = "opentelemetry-sdk-trace")  // 3 conflicts
-  )
-
-119 conflicts reference methods or fields missing from libraries already on your classpath - usually two dependency versions disagree and a binary-incompatible one was evicted.
-Check `show <proj>/evicted` and align these versions:
-  - org.slf4j:jcl-over-slf4j:2.0.17  (110 conflicts)
-  - javax.activation:javax.activation-api:1.2.0  (9 conflicts)
-To ignore them instead:
-  <proj>/missinglinkIgnoreDestinationPackages ++= List(
-    IgnoredPackage("org.apache.commons.logging"),  // 110 conflicts
-    IgnoredPackage("javax.activation")  // 9 conflicts
-  )
-
+206 conflicts found!
+Missinglink summary: conflicts found in 4 dependencies.
+ * 87 conflicts reference classes missing from the classpath
+ * 119 conflicts reference members missing from classes already on your classpath
+Exclude the dependencies that reference them:
+    <proj>/missinglinkExcludedDependencies ++= List(
+      moduleFilter(organization = "io.netty", name = "netty-common"),  // 84 missing classes, 0 missing members
+      moduleFilter(organization = "io.opentelemetry", name = "opentelemetry-sdk-trace"),  // 3 missing classes, 0 missing members
+      moduleFilter(organization = "org.slf4j", name = "jcl-over-slf4j"),  // 0 missing classes, 110 missing members
+      moduleFilter(organization = "javax.activation", name = "javax.activation-api")  // 0 missing classes, 9 missing members
+    )
 Re-run with 'missinglinkVerbose := true' to see the full per-class breakdown (which class references each missing symbol, and from which methods).
 ```
 
-The two categories get different advice:
-
-- **Missing classes** (`CLASS_NOT_FOUND`): usually an optional dependency you don't ship — exclude
-  the dependency that references the missing classes with `missinglinkExcludedDependencies`.
-- **Missing methods / fields**: usually a real binary incompatibility — realign the named
-  module/version. The class is already on the classpath (often in more than one jar), so excluding a
-  dependency won't make it go away; ignore the destination package with
-  `missinglinkIgnoreDestinationPackages` only if you can't realign.
+Conflicts are either a missing class (`CLASS_NOT_FOUND`) or a missing member on a class that *is*
+present: a method (`METHOD_SIGNATURE_NOT_FOUND`) or a field (`FIELD_NOT_FOUND`). Each conflict is
+attributed to the JAR whose bytecode makes the reference, and the per-line comment splits that JAR's
+count into missing classes vs. members (methods and fields).
 
 Set `missinglinkVerbose := true` for the full per-class, per-call-site breakdown.
 
