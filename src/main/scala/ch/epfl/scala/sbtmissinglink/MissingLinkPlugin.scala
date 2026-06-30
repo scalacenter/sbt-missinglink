@@ -85,6 +85,12 @@ object MissingLinkPlugin extends AutoPlugin {
 
     val missinglinkExcludedDependencies =
       settingKey[Seq[ModuleFilter]]("Dependencies that are excluded from analysis")
+
+    val missinglinkVerbose: SettingKey[Boolean] =
+      settingKey[Boolean](
+        "Print the full per-class, per-call-site breakdown of every conflict. " +
+          "When false (the default), only the concise summary is printed."
+      )
   }
 
   import autoImport._
@@ -105,6 +111,7 @@ object MissingLinkPlugin extends AutoPlugin {
         val classDir = (Compile / classDirectory).value
         val failOnConflicts = missinglinkFailOnConflicts.value
         val scanDependencies = missinglinkScanDependencies.value
+        val verbose = missinglinkVerbose.value
         assert(
           missinglinkIgnoreSourcePackages.value.isEmpty || missinglinkTargetSourcePackages.value.isEmpty,
           "ignoreSourcePackages and targetSourcePackages cannot be defined in the same project."
@@ -118,7 +125,8 @@ object MissingLinkPlugin extends AutoPlugin {
         val filter =
           missinglinkExcludedDependencies.value.foldLeft[ModuleFilter](_ => true)((k, v) => k - v)
 
-        val conflicts = loadArtifactsAndCheckConflicts(cp, classDir, scanDependencies, filter, log)
+        val (conflicts, sourceModules) =
+          loadArtifactsAndCheckConflicts(cp, classDir, scanDependencies, filter, log)
 
         val conflictFilters = filterConflicts(
           missinglinkIgnoreSourcePackages.value,
@@ -152,18 +160,21 @@ object MissingLinkPlugin extends AutoPlugin {
           val initialTotal = conflicts.length
           val filteredTotal = filteredConflicts.length
 
-          val diffMessage = if (initialTotal != filteredTotal) {
-            s"($initialTotal conflicts were found before applying filters)"
-          } else {
-            ""
+          val diffMessage =
+            if (initialTotal != filteredTotal)
+              s" ($initialTotal conflicts were found before applying filters)"
+            else
+              ""
+
+          val conflictNoun = if (filteredTotal == 1) "conflict" else "conflicts"
+          log.info(s"$filteredTotal $conflictNoun found!$diffMessage")
+
+          outputConflicts(filteredConflicts, sourceModules, verbose, log)
+
+          if (failOnConflicts) {
+            val verb = if (filteredTotal == 1) "was" else "were"
+            throw new MessageOnlyException(s"There $verb $filteredTotal $conflictNoun")
           }
-
-          log.info(s"$filteredTotal conflicts found! $diffMessage")
-
-          outputConflicts(filteredConflicts, log)
-
-          if (failOnConflicts)
-            throw new MessageOnlyException(s"There were $filteredTotal conflicts")
         } else {
           log.info("No conflicts found")
         }
@@ -180,6 +191,7 @@ object MissingLinkPlugin extends AutoPlugin {
     missinglinkIgnoreDestinationPackages := Nil,
     missinglinkTargetDestinationPackages := Nil,
     missinglinkExcludedDependencies := Nil,
+    missinglinkVerbose := false,
   )
 
   override def projectSettings: Seq[Setting[?]] = {
@@ -196,9 +208,21 @@ object MissingLinkPlugin extends AutoPlugin {
       log: Logger
   )(implicit
       converter: FileConverter
-  ): Seq[Conflict] = {
+  ): (Seq[Conflict], Map[ClassTypeDescriptor, ModuleID]) = {
 
     val runtimeProjectArtifacts = constructArtifacts(cp, log)
+
+    // Map each class to the module that provides it (first wins), to attribute conflicts to a JAR.
+    val sourceModules: Map[ClassTypeDescriptor, ModuleID] =
+      runtimeProjectArtifacts.foldLeft(Map.empty[ClassTypeDescriptor, ModuleID]) { (acc, ma) =>
+        ma.module match {
+          case Some(module) =>
+            ma.artifact.classes().keySet().asScala.foldLeft(acc) { (current, className) =>
+              if (current.contains(className)) current else current + (className -> module)
+            }
+          case None => acc
+        }
+      }
 
     // also need to load JDK classes from the bootstrap classpath
     val bootstrapArtifacts = loadBootstrapArtifacts(bootClasspathToUse(log), log)
@@ -237,7 +261,7 @@ object MissingLinkPlugin extends AutoPlugin {
         allArtifacts.asJava
       )
 
-    conflicts.asScala.toSeq
+    (conflicts.asScala.toSeq, sourceModules)
   }
 
   private def toArtifact(outputDirectory: File): Artifact = {
@@ -345,55 +369,138 @@ object MissingLinkPlugin extends AutoPlugin {
     }
   }
 
-  private def outputConflicts(conflicts: Seq[Conflict], log: Logger): Unit = {
+  private def outputConflicts(
+      conflicts: Seq[Conflict],
+      sourceModules: Map[ClassTypeDescriptor, ModuleID],
+      verbose: Boolean,
+      log: Logger
+  ): Unit = {
     def logLine(msg: String): Unit =
       log.error(msg)
+
+    def conflictNoun(count: Int): String = if (count == 1) "conflict" else "conflicts"
+    def referenceVerb(count: Int): String = if (count == 1) "references" else "reference"
 
     val descriptions = Map(
       ConflictCategory.CLASS_NOT_FOUND -> "Class being called not found",
       ConflictCategory.METHOD_SIGNATURE_NOT_FOUND -> "Method being called not found",
     )
 
-    // group conflict by category
-    val byCategory = conflicts.groupBy(_.category())
+    def categoryDesc(category: ConflictCategory): String =
+      descriptions.getOrElse(category, category.name().replace('_', ' '))
 
-    for ((category, conflictsInCategory) <- byCategory) {
-      val desc = descriptions.getOrElse(category, category.name().replace('_', ' '))
-      logLine("")
-      logLine("Category: " + desc)
+    def optionalLineNumber(lineNumber: Int): String =
+      if (lineNumber != 0) ":" + lineNumber else ""
 
-      // next group by artifact containing the conflict
-      val byArtifact = conflictsInCategory.groupBy(_.usedBy())
+    // Attribute every conflict to the JAR that references the missing symbol
+    val byModule: Seq[((String, String), (Int, Int))] =
+      conflicts
+        .flatMap(c => sourceModules.get(c.dependency().fromClass()).map(_ -> c.category()))
+        .groupBy { case (module, _) => (module.organization, module.name) }
+        .map { case (key, grouped) =>
+          val missingClasses = grouped.count(_._2 == ConflictCategory.CLASS_NOT_FOUND)
+          key -> (missingClasses, grouped.size - missingClasses)
+        }
+        .toSeq
+        .sortBy { case ((org, name), (classes, members)) => (-classes, -members, org, name) }
 
-      for ((artifactName, conflictsInArtifact) <- byArtifact) {
-        logLine("  In artifact: " + artifactName.name())
+    logLine(
+      if (byModule.isEmpty) "Missinglink summary: conflicts found."
+      else
+        s"Missinglink summary: conflicts found in ${byModule.size} " +
+          s"${if (byModule.size == 1) "dependency" else "dependencies"}."
+    )
 
-        // next group by class containing the conflict
-        val byClassName = conflictsInArtifact.groupBy(_.dependency().fromClass())
+    if (verbose) {
+      for ((category, conflictsInCategory) <- conflicts.groupBy(_.category())) {
+        logLine("")
+        logLine("Category: " + categoryDesc(category))
 
-        for ((classDesc, conflictsInClass) <- byClassName) {
-          logLine("    In class: " + classDesc.toString())
+        // next group by artifact containing the conflict
+        val byArtifact = conflictsInCategory.groupBy(_.usedBy())
 
-          for (conflict <- conflictsInClass) {
-            def optionalLineNumber(lineNumber: Int): String =
-              if (lineNumber != 0) ":" + lineNumber else ""
+        for ((artifactName, conflictsInArtifact) <- byArtifact) {
+          logLine("  In artifact: " + artifactName.name())
 
-            val dep = conflict.dependency()
-            logLine(
-              "      In method:  " +
-                dep.fromMethod().prettyWithoutReturnType() +
-                optionalLineNumber(dep.fromLineNumber())
-            )
-            logLine("      " + dep.describe())
-            logLine("      Problem: " + conflict.reason())
-            if (conflict.existsIn() != ConflictChecker.UNKNOWN_ARTIFACT_NAME)
-              logLine("      Found in: " + conflict.existsIn().name())
-            // this could be smarter about separating each blob of warnings by method, but for
-            // now just output a bunch of dashes always
-            logLine("      --------")
+          // next group by class containing the conflict
+          val byClassName = conflictsInArtifact.groupBy(_.dependency().fromClass())
+
+          for ((classDesc, conflictsInClass) <- byClassName) {
+            logLine("    In class: " + classDesc.toString())
+
+            // collapse all call sites that share the same missing target + reason
+            val byProblem = conflictsInClass.groupBy { conflict =>
+              (conflict.dependency().describe(), conflict.reason(), conflict.existsIn())
+            }
+
+            for (((describe, reason, existsIn), groupedConflicts) <- byProblem) {
+              logLine("      " + describe)
+              logLine("      Problem: " + reason)
+              if (existsIn != ConflictChecker.UNKNOWN_ARTIFACT_NAME)
+                logLine("      Found in: " + existsIn.name())
+
+              val callSites = groupedConflicts
+                .map { conflict =>
+                  val dep = conflict.dependency()
+                  dep.fromMethod().prettyWithoutReturnType() +
+                    optionalLineNumber(dep.fromLineNumber())
+                }
+                .distinct
+                .sorted
+
+              logLine("      Referenced from:")
+              for (callSite <- callSites)
+                logLine("        " + callSite)
+              logLine("      --------")
+            }
           }
         }
       }
+    } else {
+      val (classNotFound, signatureNotFound) =
+        conflicts.partition(_.category() == ConflictCategory.CLASS_NOT_FOUND)
+
+      def classCount(n: Int): String = s"$n missing ${if (n == 1) "class" else "classes"}"
+      def memberCount(n: Int): String = s"$n missing ${if (n == 1) "member" else "members"}"
+
+      if (classNotFound.nonEmpty)
+        logLine(
+          s" * ${classNotFound.size} ${conflictNoun(classNotFound.size)} " +
+            s"${referenceVerb(classNotFound.size)} classes missing from the classpath"
+        )
+      if (signatureNotFound.nonEmpty)
+        logLine(
+          s" * ${signatureNotFound.size} ${conflictNoun(signatureNotFound.size)} " +
+            s"${referenceVerb(signatureNotFound.size)} members missing from classes already on your classpath"
+        )
+
+      if (byModule.nonEmpty) {
+        logLine("Exclude the dependencies that reference them:")
+        logLine("    <proj>/missinglinkExcludedDependencies ++= List(")
+        byModule.zipWithIndex.foreach { case (((org, name), (classes, members)), index) =>
+          val comma = if (index == byModule.size - 1) "" else ","
+          logLine(
+            s"""      moduleFilter(organization = "$org", name = "$name")$comma""" +
+              s"  // ${classCount(classes)}, ${memberCount(members)}"
+          )
+        }
+        logLine("    )")
+      }
+
+      val projectLocal =
+        conflicts.count(c => !sourceModules.contains(c.dependency().fromClass()))
+      if (projectLocal != 0) {
+        val verb = if (projectLocal == 1) "originates" else "originate"
+        logLine(
+          s"$projectLocal ${conflictNoun(projectLocal)} $verb in your own project and cannot " +
+            "be excluded this way."
+        )
+      }
+
+      logLine(
+        "Re-run with 'missinglinkVerbose := true' to see the full per-class breakdown " +
+          "(which class references each missing symbol, and from which methods)."
+      )
     }
   }
 
