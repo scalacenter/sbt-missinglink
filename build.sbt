@@ -39,7 +39,7 @@ lazy val `sbt-missinglink` = project
           "2.0.1"
       }
     },
-    addSbtPlugin("com.github.sbt" % "sbt2-compat" % "0.1.0"),
+    addSbtPlugin("com.github.sbt" % "sbt2-compat" % "0.2.0"),
     libraryDependencies ++= Seq(
       "com.spotify" % "missinglink-core" % "0.2.11",
       "org.ow2.asm" % "asm-tree" % "9.9.1"
