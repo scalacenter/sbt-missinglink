@@ -26,7 +26,7 @@ lazy val `sbt-missinglink` = project
     scalacOptions ++= {
       scalaBinaryVersion.value match {
         case "2.12" =>
-          Seq("-release:8")
+          Seq("-release:17")
         case _ =>
           Nil
       }
@@ -41,8 +41,7 @@ lazy val `sbt-missinglink` = project
     },
     addSbtPlugin("com.github.sbt" % "sbt2-compat" % "0.1.0"),
     libraryDependencies ++= Seq(
-      "com.spotify" % "missinglink-core" % "0.2.11",
-      "org.ow2.asm" % "asm-tree" % "9.9.1"
+      "com.palantir.gradle.abi-checker" % "abi-check-core" % "0.11.0"
     ),
     scriptedLaunchOpts := {
       scriptedLaunchOpts.value ++
