@@ -7,21 +7,27 @@ import sbt.plugins.JvmPlugin
 
 import sbtcompat.PluginCompat
 
-import java.io.FileInputStream
-
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Map
 
-import com.spotify.missinglink.{ArtifactLoader, Conflict, ConflictChecker, Java9ModuleLoader}
-import com.spotify.missinglink.Conflict.ConflictCategory
-import com.spotify.missinglink.datamodel.{
-  Artifact,
-  ArtifactBuilder,
-  ArtifactName,
-  ClassTypeDescriptor,
-  DeclaredClass,
-  Dependency
+import com.palantir.abi.checker.{
+  AbiCheckerClassLoader,
+  ArtifactLoader,
+  ConflictChecker,
+  ConflictCheckerConfiguration,
+  JdkModuleLoader
 }
+import com.palantir.abi.checker.datamodel.{Artifact, ArtifactName}
+import com.palantir.abi.checker.datamodel.classlocation.ClassLocation
+import com.palantir.abi.checker.datamodel.conflict.{
+  ClassDependency,
+  Conflict,
+  Dependency,
+  FieldDependency,
+  MethodDependency
+}
+import com.palantir.abi.checker.datamodel.conflict.Conflict.ConflictCategory
+import com.palantir.abi.checker.datamodel.types.ClassTypeDescriptor
 import xsbti.FileConverter
 
 object MissingLinkPlugin extends AutoPlugin {
@@ -100,6 +106,9 @@ object MissingLinkPlugin extends AutoPlugin {
 
   // Make it easy to throttle the concurrency of running missing-link on multiple projects, it consumes a lot of memory
   val missinglinkConflictsTag = Tags.Tag("missinglinkConflicts")
+
+  // The JDK does not change during the lifetime of the sbt server, so its index can be shared.
+  private lazy val jdkModuleLoader = new JdkModuleLoader
 
   val configSettings: Seq[Setting[?]] = Def.settings(
     missinglinkCheck := Def
@@ -209,8 +218,9 @@ object MissingLinkPlugin extends AutoPlugin {
   )(implicit
       converter: FileConverter
   ): (Seq[Conflict], Map[ClassTypeDescriptor, ModuleID]) = {
+    val artifactLoader = new ArtifactLoader
 
-    val runtimeProjectArtifacts = constructArtifacts(cp, log)
+    val runtimeProjectArtifacts = constructArtifacts(artifactLoader, cp, classDirectory, log)
 
     // Map each class to the module that provides it (first wins), to attribute conflicts to a JAR.
     val sourceModules: Map[ClassTypeDescriptor, ModuleID] =
@@ -224,22 +234,24 @@ object MissingLinkPlugin extends AutoPlugin {
         }
       }
 
-    // also need to load JDK classes from the bootstrap classpath
-    val bootstrapArtifacts = loadBootstrapArtifacts(bootClasspathToUse(log), log)
+    // also need to load JDK classes
+    val jdkArtifacts = jdkModuleLoader.getJavaModuleArtifacts().asScala.toList
 
-    val allArtifacts = runtimeProjectArtifacts.map(_.artifact) ++ bootstrapArtifacts
-
-    val runtimeArtifactsAfterExclusions = runtimeProjectArtifacts
-      .filter(f => f.module.fold(true)(excluded))
-      .map(_.artifact)
+    val (runtimeArtifactsAfterExclusions, excludedArtifacts) =
+      runtimeProjectArtifacts.partition(_.module.fold(true)(excluded))
 
     val projectArtifact =
-      if (scanDependencies)
-        classesToArtifact(runtimeArtifactsAfterExclusions.flatMap(_.classes.asScala).toMap)
-      else
-        toArtifact(classDirectory)
+      artifactLoader.load(classDirectory.toPath, ArtifactName.of("project"))
 
-    if (projectArtifact.classes().isEmpty()) {
+    // The classes the reachability analysis starts from
+    val entryPoints: Seq[ClassLocation] =
+      if (scanDependencies)
+        (projectArtifact :: runtimeArtifactsAfterExclusions.map(_.artifact))
+          .flatMap(_.classes().values().asScala)
+      else
+        projectArtifact.classes().values().asScala.toSeq
+
+    if (entryPoints.isEmpty) {
       log.warn(
         "No classes found in project build directory" +
           " - did you run 'sbt compile' first?"
@@ -249,88 +261,68 @@ object MissingLinkPlugin extends AutoPlugin {
     log.debug("Checking for conflicts starting from " + projectArtifact.name().name())
     log.debug("Artifacts included in the project: ")
     for (artifact <- runtimeArtifactsAfterExclusions) {
-      log.debug("    " + artifact.name().name())
+      log.debug("    " + artifact.artifact.name().name())
     }
 
-    val conflictChecker = new ConflictChecker
-
-    val conflicts =
-      conflictChecker.check(
-        projectArtifact,
-        runtimeArtifactsAfterExclusions.asJava,
-        allArtifacts.asJava
+    // Excluded dependencies stay on the classpath, but their classes are not analyzed.
+    // Neither are the classes of the JDK.
+    val configuration = ConflictCheckerConfiguration
+      .builder()
+      .addAllIgnoredArtifactPrefixes(
+        (jdkArtifacts ++ excludedArtifacts.map(_.artifact)).map(_.name().name()).asJava
       )
+      .build()
+
+    val runtimeClasspath =
+      jdkArtifacts ++ (projectArtifact :: runtimeProjectArtifacts.map(_.artifact))
+
+    val conflicts = ConflictChecker.checkWithEntryPoints(
+      configuration,
+      new AbiCheckerClassLoader,
+      runtimeClasspath.asJava,
+      entryPoints.asJava
+    )
 
     (conflicts.asScala.toSeq, sourceModules)
   }
 
-  private def toArtifact(outputDirectory: File): Artifact = {
-    val classes =
-      (outputDirectory ** "*.class")
-        .get()
-        .map(loadClass)
-        .map(c => c.className() -> c)
-        .toMap
-
-    classesToArtifact(classes)
-  }
-
-  private def classesToArtifact(classes: Map[ClassTypeDescriptor, DeclaredClass]): Artifact = {
-    new ArtifactBuilder()
-      .name(new ArtifactName("project"))
-      .classes(classes.asJava)
-      .build()
-  }
-
-  private def loadClass(f: File): DeclaredClass = {
-    val is = new FileInputStream(f)
-    try com.spotify.missinglink.ClassLoader.load(is)
-    finally is.close()
-  }
-
-  private def loadBootstrapArtifacts(bootstrapClasspath: String, log: Logger)(implicit
-      converter: FileConverter
-  ): List[Artifact] = {
-    if (bootstrapClasspath == null) {
-      Java9ModuleLoader.getJava9ModuleArtifacts((s, ex) => log.warn(s)).asScala.toList
-    } else {
-      val cp = bootstrapClasspath
-        .split(System.getProperty("path.separator"))
-        .map(f => Attributed.blank(PluginCompat.toFileRef(file(f))))
-        .toList
-
-      constructArtifacts(cp, log).map(_.artifact)
-    }
-  }
-
-  private def bootClasspathToUse(log: Logger): String = {
-    /*if (this.bootClasspath != null) {
-      log.debug("using configured boot classpath: " + this.bootClasspath);
-      this.bootClasspath;
-    } else {*/
-    val bootClasspath = System.getProperty("sun.boot.class.path")
-    log.debug("derived bootclasspath: " + bootClasspath)
-    bootClasspath
-    /*}*/
-  }
-
-  private def constructArtifacts(cp: Classpath, log: Logger)(implicit
-      converter: FileConverter
-  ): List[ModuleArtifact] = {
-    val artifactLoader = new ArtifactLoader
-
+  private def constructArtifacts(
+      artifactLoader: ArtifactLoader,
+      cp: Classpath,
+      classDirectory: File,
+      log: Logger
+  )(implicit converter: FileConverter): List[ModuleArtifact] = {
     def isValid(entry: File): Boolean =
-      (entry.isFile() && entry.getPath().endsWith(".jar")) || entry.isDirectory()
+      entry != classDirectory &&
+        ((entry.isFile() && entry.getPath().endsWith(".jar")) || entry.isDirectory())
+
+    // JARs are named by their file name. Directories are named by their full path,
+    // since most of them are called "classes".
+    def artifactName(f: File): String =
+      if (f.isDirectory()) f.getPath() else f.getName()
 
     def fileToArtifact(f: Attributed[PluginCompat.FileRef]): ModuleArtifact = {
       log.debug("loading artifact for path: " + f)
+      val file = PluginCompat.toFile(f.data)
       ModuleArtifact(
-        artifactLoader.load(PluginCompat.toFile(f.data)),
+        artifactLoader.load(file.toPath, ArtifactName.of(artifactName(file))),
         f.get(PluginCompat.moduleIDStr).map(PluginCompat.parseModuleIDStrAttribute)
       )
     }
 
     cp.filter(c => isValid(PluginCompat.toFile(c.data))).map(fileToArtifact).toList
+  }
+
+  /** Same text as `Dependency.describe()` of Spotify's missinglink. */
+  private def describe(dependency: Dependency): String = dependency match {
+    case d: MethodDependency =>
+      "Call to: " + d.targetClass() + "." + d.targetMethod().method().prettyWithoutReturnType()
+    case d: FieldDependency =>
+      "Access to: " + d.targetClass() + "." + d.field().name()
+    case d: ClassDependency =>
+      "Load class: " + d.targetClass()
+    case d =>
+      "Reference to: " + d.targetClass()
   }
 
   private def filterConflicts[T <: PackageFilter](
@@ -345,7 +337,7 @@ object MissingLinkPlugin extends AutoPlugin {
 
       def isFiltered(conflict: Conflict): Boolean = {
         val descriptor = field(conflict.dependency())
-        val className = descriptor.getClassName.replace('/', '.')
+        val className = descriptor.className()
         val conflictPackageName = className.substring(0, className.lastIndexOf('.'))
 
         pfs.apply(conflictPackageName)(packageFilters)
@@ -384,6 +376,7 @@ object MissingLinkPlugin extends AutoPlugin {
     val descriptions = Map(
       ConflictCategory.CLASS_NOT_FOUND -> "Class being called not found",
       ConflictCategory.METHOD_SIGNATURE_NOT_FOUND -> "Method being called not found",
+      ConflictCategory.FIELD_NOT_FOUND -> "Field being accessed not found",
     )
 
     def categoryDesc(category: ConflictCategory): String =
@@ -430,19 +423,19 @@ object MissingLinkPlugin extends AutoPlugin {
 
             // collapse all call sites that share the same missing target + reason
             val byProblem = conflictsInClass.groupBy { conflict =>
-              (conflict.dependency().describe(), conflict.reason(), conflict.existsIn())
+              (describe(conflict.dependency()), conflict.reason(), conflict.existsIn())
             }
 
             for (((describe, reason, existsIn), groupedConflicts) <- byProblem) {
               logLine("      " + describe)
               logLine("      Problem: " + reason)
-              if (existsIn != ConflictChecker.UNKNOWN_ARTIFACT_NAME)
+              if (existsIn != Conflict.UNKNOWN_ARTIFACT_NAME)
                 logLine("      Found in: " + existsIn.name())
 
               val callSites = groupedConflicts
                 .map { conflict =>
                   val dep = conflict.dependency()
-                  dep.fromMethod().prettyWithoutReturnType() +
+                  dep.fromMethod().method().prettyWithoutReturnType() +
                     optionalLineNumber(dep.fromLineNumber())
                 }
                 .distinct

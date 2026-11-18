@@ -1,24 +1,28 @@
 # sbt-missinglink
 
-An sbt plugin for [missinglink](https://github.com/spotify/missinglink).
+An sbt plugin that checks the transitive dependencies of your project for binary compatibility
+conflicts, in the spirit of Spotify's [missinglink](https://github.com/spotify/missinglink).
+
+Since Spotify's missinglink is no longer maintained, the analysis is now done by the
+`abi-check-core` library of Palantir's
+[gradle-transitive-abi-checker](https://github.com/palantir/gradle-transitive-abi-checker),
+a maintained fork of missinglink's core.
 
 ## Usage
 
-Add the following lines in `project/plugins.sbt`:
+The plugin requires Java 17 or newer.
+Add the following line in `project/plugins.sbt`:
 
 ```scala
 addSbtPlugin("ch.epfl.scala" % "sbt-missinglink" % "<sbt-missinglink-version>")
-libraryDependencies ++= List(
-  "com.spotify" % "missinglink-core" % "<missinglink-core-version>",
-  "org.ow2.asm" % "asm-tree" % "<asm-tree-version>",
-)
 ```
 
-You can find the latest `missinglink-core` version [in their release list](https://github.com/spotify/missinglink/releases).
+| `sbt-missinglink` | `abi-check-core` |
+| :---: | :---: |
+| [![sbt-missinglink badge](https://maven-badges.sml.io/sonatype-central/ch.epfl.scala/sbt-missinglink/badge.svg)](https://central.sonatype.com/artifact/ch.epfl.scala/sbt-missinglink) | [![abi-check-core badge](https://maven-badges.sml.io/sonatype-central/com.palantir.gradle.abi-checker/abi-check-core/badge.svg)](https://central.sonatype.com/artifact/com.palantir.gradle.abi-checker/abi-check-core) |
 
-| `sbt-missinglink` | `missinglink-core` | `asm-tree` |
-| :---: | :---: | :---: |
-| [![sbt-missinglink badge](https://maven-badges.sml.io/sonatype-central/ch.epfl.scala/sbt-missinglink/badge.svg)](https://central.sonatype.com/artifact/ch.epfl.scala/sbt-missinglink) | [![missinglink-core badge](https://maven-badges.sml.io/sonatype-central/com.spotify/missinglink-core/badge.svg)](https://central.sonatype.com/artifact/com.spotify/missinglink-core) | [![asm-tree badge](https://maven-badges.sml.io/sonatype-central/org.ow2.asm/asm-tree/badge.svg)](https://central.sonatype.com/artifact/org.ow2.asm/asm-tree) |
+Up to version 0.3.x, `missinglink-core` and `asm-tree` had to be added to `libraryDependencies` too.
+This is no longer necessary: remove them when you upgrade.
 
 Then, run the following task for the project you want to test:
 
@@ -112,8 +116,9 @@ concurrentRestrictions += Tags.limit(missinglinkConflictsTag, 4)
 ## More information
 
 You can find more information about the problem statement, caveats and
-limitations, etc. in the upstream project
-[missinglink](https://github.com/spotify/missinglink).
+limitations, etc. in the original project
+[missinglink](https://github.com/spotify/missinglink)
+and in [gradle-transitive-abi-checker](https://github.com/palantir/gradle-transitive-abi-checker).
 
 ## Acknowledgments
 
