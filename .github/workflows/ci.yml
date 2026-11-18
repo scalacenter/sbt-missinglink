@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        javaversion: ["8", "11", "17", "21", "25"]
+        javaversion: ["17", "21", "25"]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-java@v5
@@ -27,7 +27,6 @@ jobs:
         run: sbt "++ 2.12.x" scripted
       - name: Scripted tests sbt 2
         run: sbt "++ 3.x" scripted
-        if: ${{ matrix.javaversion != 8 && matrix.javaversion != 11 }}
       - name: Test generate documentation
         run: sbt doc
   ci:

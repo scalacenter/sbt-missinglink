@@ -1,5 +1,6 @@
 inThisBuild(
   Def.settings(
+    organization := "test-org",
     version := "0.1.0",
     scalaVersion := "2.12.21",
   )
@@ -21,5 +22,6 @@ lazy val `uses-problematic-dependency` = project
     libraryDependencies ++= Seq(
       "com.google.guava" % "guava" % "18.0",
     ),
-    missinglinkScanDependencies := true
+    // The broken call is in this artifact, so its conflicts are not reported
+    missinglinkIgnoredArtifactPrefixes += "test-org:has-problematic-dependency",
   )

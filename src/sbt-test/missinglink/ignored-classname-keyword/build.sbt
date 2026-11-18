@@ -5,7 +5,7 @@ inThisBuild(
   )
 )
 
-lazy val `target-source-package` = project
+lazy val `ignored-classname-keyword` = project
   .in(file("."))
   .settings(
     libraryDependencies ++= Seq(
@@ -16,5 +16,6 @@ lazy val `target-source-package` = project
     // Speed up compilation a bit. Our .java files do not need to see the .scala files.
     compileOrder := CompileOrder.JavaThenScala,
 
-    missinglinkTargetSourcePackages += TargetedPackage("test")
+    // test.ProblematicDependency is ignored
+    missinglinkIgnoredClassnameKeywords += "PROBLEMATIC"
   )
