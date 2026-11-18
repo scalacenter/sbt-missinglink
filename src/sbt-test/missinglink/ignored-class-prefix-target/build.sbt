@@ -5,7 +5,7 @@ inThisBuild(
   )
 )
 
-lazy val `exclude-problematic-dependency` = project
+lazy val `ignored-class-prefix-target` = project
   .in(file("."))
   .settings(
     libraryDependencies ++= Seq(
@@ -16,5 +16,7 @@ lazy val `exclude-problematic-dependency` = project
     // Speed up compilation a bit. Our .java files do not need to see the .scala files.
     compileOrder := CompileOrder.JavaThenScala,
 
-    missinglinkExcludedDependencies += moduleFilter(organization = "com.google.guava")
+    // The called class is ignored
+    missinglinkIgnoredClassPrefixes += "com.google.common.",
+    missinglinkIgnoredClassPrefixes += "whatever.",
   )

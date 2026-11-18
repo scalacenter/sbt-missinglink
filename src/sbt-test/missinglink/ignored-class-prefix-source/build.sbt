@@ -5,7 +5,7 @@ inThisBuild(
   )
 )
 
-lazy val `ignore-destination-package` = project
+lazy val `ignored-class-prefix-source` = project
   .in(file("."))
   .settings(
     libraryDependencies ++= Seq(
@@ -16,6 +16,7 @@ lazy val `ignore-destination-package` = project
     // Speed up compilation a bit. Our .java files do not need to see the .scala files.
     compileOrder := CompileOrder.JavaThenScala,
 
-    missinglinkIgnoreDestinationPackages += IgnoredPackage("com.google.common"),
-    missinglinkIgnoreDestinationPackages += IgnoredPackage("whatever"),
+    // The calling class is ignored
+    missinglinkIgnoredClassPrefixes += "test.",
+    missinglinkIgnoredClassPrefixes += "whatever.",
   )

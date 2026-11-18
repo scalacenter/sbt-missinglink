@@ -1,5 +1,5 @@
 package test;
 
 public enum Foo {
-    BAR
+  BAR
 }

@@ -5,7 +5,7 @@ inThisBuild(
   )
 )
 
-lazy val `target-destination-package` = project
+lazy val `error-artifact-prefixes` = project
   .in(file("."))
   .settings(
     libraryDependencies ++= Seq(
@@ -16,6 +16,6 @@ lazy val `target-destination-package` = project
     // Speed up compilation a bit. Our .java files do not need to see the .scala files.
     compileOrder := CompileOrder.JavaThenScala,
 
-    // Will ignore Guava conflict
-    missinglinkTargetDestinationPackages += TargetedPackage("test")
+    // Only conflicts in Guava itself are reported, not the one in this project
+    missinglinkErrorArtifactPrefixes += "com.google.guava:"
   )
